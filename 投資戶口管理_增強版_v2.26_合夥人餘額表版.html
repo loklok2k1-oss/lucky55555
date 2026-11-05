@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投資合伙戶口管理系統 v2.26 - 完整修復版</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Microsoft JhengHei', 'PingFang TC', 'Heiti TC', sans-serif; }
+        body { margin: 0; padding: 16px; background: #f3f4f6; color: #1f2937; line-height: 1.5; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { text-align: center; color: #1e3a5f; font-size: 24px; margin-bottom: 4px; }
+        .version { text-align: center; color: #9ca3af; font-size: 12px; margin-bottom: 20px; }
+        h2 { font-size: 18px; color: #1e3a5f; margin-top: 24px; margin-bottom: 12px; border-bottom: 2px solid #e5e7eb; padding-bottom: 6px; }
+        h3 { font-size: 15px; color: #374151; margin-top: 18px; margin-bottom: 8px; }
+        .subtitle { text-align: center; color: #6b7280; font-size: 13px; margin-bottom: 20px; }
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+        .card { background: #fff; border-radius: 8px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
+        .card .lbl { font-size: 12px; color: #6b7280; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .card .val { font-size: 20px; font-weight: bold; color: #111827; }
+        .card .val.pos { color: #059669; }
+        .card .val.neg { color: #dc2626; }
+        .card .val.hl { color: #d97706; }
+        .section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .section-title { font-size: 16px; font-weight: bold; color: #1e3a5f; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: center; }
+        th { background: #1e3a5f; color: #fff; font-weight: 600; font-size: 12px; cursor: pointer; user-select: none; }
+        th:hover { background: #2c5282; }
+        tr:nth-child(even) { background: #f9fafb; }
+        td.amt { text-align: right; font-variant-numeric: tabular-nums; }
+        td.ctr { text-align: center; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+        .badge-owe { background: #fecaca; color: #991b1b; }
+        .badge-credit { background: #bbf7d0; color: #15803d; }
+        .badge-zero { background: #e5e7eb; color: #4b5563; }
+        .badge-none { background: #e2e8f0; color: #64748b; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; align-items: end; }
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-group label { font-size: 12px; font-weight: 600; color: #374151; }
+        .form-group input, .form-group select { padding: 7px 9px; border: 1px solid #d1d5db; border-radius: 5px; font-size: 13px; }
+        .form-group input:focus { outline: none; border-color: #2563eb; }
+        button.btn { padding: 8px 14px; border-radius: 5px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        button.btn:hover { opacity: 0.9; }
+        button.btn-primary { background: #2563eb; color: #fff; }
+        button.btn-danger { background: #dc2626; color: #fff; }
+        button.btn-success { background: #059669; color: #fff; }
+        button.btn-outline { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+        button.btn-sm { padding: 6px 10px; font-size: 12px; }
+        .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid #e5e7eb; }
+        .tab { padding: 10px 18px; background: #f3f4f6; color: #4b5563; cursor: pointer; border: none; font-size: 13px; font-weight: 600; border-bottom: 2px solid transparent; }
+        .tab:hover { background: #e5e7eb; }
+        .tab.active { background: #fff; color: #2563eb; border-bottom-color: #2563eb; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .hidden { display: none !important; }
+        .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+        .partner-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+        .alert { padding: 10px 14px; border-radius: 5px; margin-bottom: 16px; font-size: 13px; display: none; }
+        .alert.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+        .alert.success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+        .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
+        .csv-template { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 12px; margin-top: 10px; overflow-x: auto; }
+        .csv-template pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
+        .enc-hint { font-size: 11px; color: #6b7280; margin-top: 6px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>投資合伙戶口管理系統</h1>
+        <div class="version">v2.26 - 完整修復版</div>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="dashboard">總覽</button>
+            <button class="tab" data-tab="transactions">交易記錄</button>
+            <button class="tab" data-tab="import">匯入 CSV</button>
+            <button class="tab" data-tab="admin">後台管理</button>
+            <button class="tab" data-tab="dividend">📈 股息計算器</button>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-content active">
+            <div class="dashboard">
+                <div class="card">
+                    <div class="lbl">銀行現金結餘</div>
+                    <div class="val" id="cBal">HK$ 0.00</div>
+                </div>
+                <div class="card">
+                    <div class="lbl">持有股票總市值</div>
+                    <div class="val" id="sVal">HK$ 0.00</div>
+                </div>
+                <div class="card">
+                    <div class="lbl">總資產</div>
+                    <div class="val" id="tAst">HK$ 0.00</div>
+                </div>
+                <div class="card">
+                    <div class="lbl">投入本金</div>
+                    <div class="val" id="tPri">HK$ 0.00</div>
+                </div>
+                <div class="card">
+                    <div class="lbl">總盈虧 / 純利</div>
+                    <div class="val" id="tPnl">HK$ 0.00</div>
+                </div>
+                <div class="card">
+                    <div class="lbl">累計股息</div>
+                    <div class="val" id="tDiv">HK$ 0.00</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">👥 合夥人餘額表</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>合夥人</th>
+                            <th>應存金額</th>
+                            <th>實際存入</th>
+                            <th>差額</th>
+                            <th>盈虧分佈</th>
+                            <th>持股比例</th>
+                        </tr>
+                    </thead>
+                    <tbody id="partnerBalanceTableBody"></tbody>
+                </table>
+            </div>
+
+            <div class="section" id="reconSection">
+                <div class="section-title">📊 對帳現金結餘</div>
+                <table>
+                    <tbody id="reconTableBody">
+                    <tr><td><strong>銀行現金結餘</strong></td><td class="amt" id="reconBank">HK$ 0.00</td></tr>
+                    <tr><td><strong>持有股票總市值</strong></td><td class="amt" id="reconStock">HK$ 0.00</td></tr>
+                    <tr><td><strong>總資產</strong></td><td class="amt" id="reconTotal">HK$ 0.00</td></tr>
+                    <tr><td><strong>投入本金</strong></td><td class="amt" id="reconPrincipal">HK$ 0.00</td></tr>
+                    <tr><td><strong>總盈虧 / 純利</strong></td><td class="amt" id="reconPnl">HK$ 0.00</td></tr>
+                    <tr><td><strong>累計股息</strong></td><td class="amt" id="reconDiv">HK$ 0.00</td></tr>
+                
+                </tbody></table>
+                <button class="btn btn-outline" onclick="toggleReconReport()">隱藏對帳報表</button>
+            </div>
+
+            <div class="section">
+                <div class="section-title">📈 更新股票目前價格</div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>股票代號與價格</label>
+                        <input type="text" id="quickPriceInput" placeholder="例如 00003.HK,6.5">
+                    </div>
+                    <button class="btn btn-primary" onclick="bulkUpdatePrices()">批次更新</button>
+                </div>
+                <div class="enc-hint">目前股票代號：<span id="stockCodesDisplay">00003.HK</span></div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">💾 JSON 備份</div>
+                <div class="controls">
+                    <button class="btn btn-outline" onclick="exportJSON()">匯出 JSON 備份</button>
+                    <button class="btn btn-outline" onclick="document.getElementById('jsonFile').click()">匯入 JSON 還原</button>
+                    <input type="file" id="jsonFile" accept=".json" style="display:none;" onchange="importJSONFile()">
+                </div>
+            </div>
+        </div>
+
+        <!-- Transactions Tab -->
+        <div id="tab-transactions" class="tab-content">
+            <div class="section">
+                <div class="section-title">📝 交易記錄</div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="document.getElementById('txDate').focus(); addTransactionForm()">新增交易</button>
+                    <button class="btn btn-outline" onclick="selectAllTx()">全選</button>
+                    <button class="btn btn-danger" onclick="deleteSelectedTx()">刪除選中</button>
+                    <span id="txCount">0 筆交易</span>
+                </div>
+                <table id="txTable">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;"><input type="checkbox" id="selectAllCb" onchange="toggleSelectAll()"></th>
+                            <th>日期</th>
+                            <th>代號</th>
+                            <th>動作</th>
+                            <th>股數</th>
+                            <th>手費</th>
+                            <th>金額</th>
+                            <th>合夥人</th>
+                            <th>備註</th>
+                            <th style="width:100px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="txBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Import CSV Tab -->
+        <div id="tab-import" class="tab-content">
+            <div class="section">
+                <div class="section-title">📥 匯入 CSV</div>
+                <div class="controls">
+                    <input type="file" id="csvFile" accept=".csv" onchange="parseCSVFile()">
+                    <button class="btn btn-outline" onclick="document.getElementById('csvFile').click()">選擇檔案</button>
+                </div>
+                <div class="csv-template">
+                    <strong>CSV 欄位格式：</strong> Date,Code,Action,Price,Quantity,FEE,Currency,Note,Partner
+                    <pre>2024-01-15,00003.HK,BUY,7.2700,500,50,HKD,,A
+2024-02-15,00003.HK,DIVIDEND,,,0,HKD,2.50,A</pre>
+                </div>
+                <div class="enc-hint">支援 UTF-8 / GBK / Big5 編碼，自動去除 BOM</div>
+            </div>
+        </div>
+
+        <!-- Admin Tab -->
+        <div id="tab-admin" class="tab-content">
+            <div class="section">
+                <div class="section-title">⚙️ 後台管理</div>
+
+                <h3>合夥人管理</h3>
+                <div class="controls">
+                    <input type="text" id="newPartnerName" placeholder="合夥人名稱">
+                    <button class="btn btn-primary" onclick="addPartner()">新增合夥人</button>
+                </div>
+                <div id="partnerList"></div>
+
+                <h3>股票管理</h3>
+                <div class="controls">
+                    <input type="text" id="newStockCode" placeholder="股票代號 (例如 00003.HK)">
+                    <button class="btn btn-primary" onclick="addStock()">新增股票</button>
+                </div>
+                <div id="stockList"></div>
+
+                <button class="btn btn-danger" onclick="resetAllData()">重置所有資料</button>
+            </div>
+        </div>
+
+        <!-- Dividend Calculator Tab -->
+        <div id="tab-dividend" class="tab-content">
+            <div class="section">
+                <div class="section-title">📈 股息計算器</div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>股票代碼</label>
+                        <input type="text" id="divCode" value="00003.HK">
+                    </div>
+                    <div class="form-group">
+                        <label>初始持股數</label>
+                        <input type="number" id="divShares" step="0.0001" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>每股股息 (HKD)</label>
+                        <input type="number" id="divPerShare" step="0.0001" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>派息頻率</label>
+                        <select id="divFrequency">
+                            <option value="1">每年 1 次</option>
+                            <option value="2">每年 2 次</option>
+                            <option value="4">每年 4 次</option>
+                            <option value="12">每月 1 次</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>稅率 (%)</label>
+                        <input type="number" id="divTaxRate" step="0.1" min="0" max="100" value="0">
+                    </div>
+                    <div class="form-group" style="display:flex;align-items:end;">
+                        <button class="btn btn-primary" onclick="calculateDividend()">計算股息</button>
+                        <button class="btn btn-outline" onclick="clearDividend()">清除</button>
+                    </div>
+                </div>
+                <div id="dividendResult" style="display:none;margin-top:16px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;">
+                    <h4 style="margin-top:0;color:#15803d;">📊 股息計算結果</h4>
+                    <table style="width:100%;font-size:13px;">
+                        <tr><td><strong>股票代碼</strong></td><td class="amt" id="resCode">-</td></tr>
+                        <tr><td><strong>持股數</strong></td><td class="amt" id="resShares">-</td></tr>
+                        <tr><td><strong>每股股息</strong></td><td class="amt" id="resPerShare">HK$ 0.0000</td></tr>
+                        <tr><td><strong>派息頻率</strong></td><td class="amt" id="resFreq">-</td></tr>
+                        <tr><td><strong>稅率</strong></td><td class="amt" id="resTaxRate">0%</td></tr>
+                        <tr><td><strong>每次股息</strong></td><td class="amt" id="resPerPayment">HK$ 0.00</td></tr>
+                        <tr><td><strong>年股息總額 (稅前)</strong></td><td class="amt" id="resGross">HK$ 0.00</td></tr>
+                        <tr><td><strong>年股息淨額 (稅後)</strong></td><td class="amt" id="resNet">HK$ 0.00</td></tr>
+                        <tr><td><strong>稅金</strong></td><td class="amt" id="resTax">HK$ 0.00</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">🔄 複利計算 (DRIP)</div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>初始持股數</label>
+                        <input type="number" id="divShares2" step="0.0001" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>每股股息 (HKD)</label>
+                        <input type="number" id="divPerShare2" step="0.0001" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>派息頻率</label>
+                        <select id="divFrequency2">
+                            <option value="1">每年 1 次</option>
+                            <option value="2">每年 2 次</option>
+                            <option value="4">每年 4 次</option>
+                            <option value="12">每月 1 次</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>稅率 (%)</label>
+                        <input type="number" id="divTaxRate2" step="0.1" min="0" max="100" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>年數</label>
+                        <input type="number" id="compYears" step="1" min="0" value="10">
+                    </div>
+                    <div class="form-group">
+                        <label>目前股價 (HKD)</label>
+                        <input type="number" id="compPrice" step="0.0001" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>股息再投資</label>
+                        <select id="compReinvest">
+                            <option value="1">是 (DRIP)</option>
+                            <option value="0">否 (現金)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="display:flex;align-items:end;">
+                        <button class="btn btn-primary" onclick="calculateCompoundDividend()">計算複利</button>
+                        <button class="btn btn-outline" onclick="clearCompoundDividend()">清除</button>
+                    </div>
+                </div>
+                <div id="compoundResult" style="display:none;margin-top:16px;padding:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
+                    <h4 style="margin-top:0;color:#92400e;">📊 複利計算結果</h4>
+                    <table style="width:100%;font-size:13px;">
+                        <tr><td><strong>年數</strong></td><td class="amt" id="resCompYears">-</td></tr>
+                        <tr><td><strong>目前股價</strong></td><td class="amt" id="resCompPrice">HK$ 0.00</td></tr>
+                        <tr><td><strong>股息再投資</strong></td><td class="amt" id="resCompReinvest">-</td></tr>
+                        <tr><td><strong>初始持股數</strong></td><td class="amt" id="resCompInitShares">-</td></tr>
+                        <tr><td><strong>最終持股數</strong></td><td class="amt" id="resCompFinalShares">-</td></tr>
+                        <tr><td><strong>新增股份 (再投資)</strong></td><td class="amt" id="resCompAddedShares">-</td></tr>
+                        <tr><td><strong>股息總額 (稅前)</strong></td><td class="amt" id="resCompGross">HK$ 0.00</td></tr>
+                        <tr><td><strong>股息淨額 (稅後)</strong></td><td class="amt" id="resCompNet">HK$ 0.00</td></tr>
+                        <tr><td><strong>最終股票總值</strong></td><td class="amt" id="resCompFinalValue">HK$ 0.00</td></tr>
+                        <tr><td><strong>總回報率</strong></td><td class="amt" id="resCompROI">0%</td></tr>
+                        <tr><td><strong>Total Return</strong></td><td class="amt" id="resCompTotalReturn">0%</td></tr>
+                        <tr><td><strong>初始價值</strong></td><td class="amt" id="resCompInitialValue">HK$ 0.00</td></tr>
+                        <tr><td><strong>年化報酬率 (CAGR)</strong></td><td class="amt" id="resCompCAGR">0%</td></tr>
+                    </table>
+
+                    <h5 style="margin-top:16px;margin-bottom:8px;color:#92400e;">📅 每年明細</h5>
+                    <table style="width:100%;font-size:12px;">
+                        <thead>
+                            <tr>
+                                <th style="width:8%;">年份</th>
+                                <th style="width:16%;">年初持股</th>
+                                <th style="width:16%;">年末持股</th>
+                                <th style="width:16%;">新增股數</th>
+                                <th style="width:16%;">股息總額(稅前)</th>
+                                <th style="width:14%;">稅金</th>
+                                <th style="width:14%;">股息淨額</th>
+                            </tr>
+                        </thead>
+                        <tbody id="compoundYearlyBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始狀態
+        let state = {
+            transactions: [],
+            partners: ['A', 'B', 'C', 'D', 'E'],
+            partnerNames: {'A': '合夥人A', 'B': '合夥人B', 'C': '合夥人C', 'D': '合夥人D', 'E': '合夥人E'},
+            stocks: ['00003.HK'],
+            stockPrices: {'00003.HK': 0},
+            monthlyDeposit: 500,
+            startDate: '2018-03-01'
+        };
+
+        let editingTxId = null;
+        window.selectedTxIds = new Set();
+        window.txSort = { key: 'date', dir: 'desc' };
+
+        // 初始化
+        function init() {
+            load();
+            bindTabEvents();
+            initMultiSelect();
+            render();
+        }
+
+        function load() {
+            try {
+                const raw = localStorage.getItem('inv_state_v2');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    state = { ...state, ...parsed };
+                    if (!state.partnerNames) state.partnerNames = {};
+                    if (!state.stockPrices) state.stockPrices = {};
+                }
+            } catch (e) {
+                console.error('load error', e);
+            }
+        }
+
+        function save() {
+            try {
+                localStorage.setItem('inv_state_v2', JSON.stringify(state));
+            } catch (e) {
+                console.error('save error', e);
+            }
+        }
+
+        function isValidPartner(p) {
+            return state.partners && state.partners.includes(p);
+        }
+
+        function ensureStock(code) {
+            if (!state.stocks.includes(code)) {
+                state.stocks.push(code);
+                state.stockPrices[code] = 0;
+            }
+        }
+
+        // Tab 切換
+        function bindTabEvents() {
+            document.querySelectorAll('.tab').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const tabId = this.getAttribute('data-tab');
+                    if (tabId) openTab(tabId);
+                });
+            });
+        }
+
+        function openTab(tabId) {
+            try {
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+                const target = document.getElementById('tab-' + tabId);
+                if (target) target.classList.add('active');
+                document.querySelectorAll('.tab').forEach(b => {
+                    if (b.getAttribute('data-tab') === tabId) b.classList.add('active');
+                });
+            } catch(e) {
+                showAlert('操作上錯誤' + e.message, 'error');
+            }
+            try {
+                render();
+            } catch(e) {
+                console.error('Render error:', e);
+            }
+        }
+
+        // 顯示/隱藏對帳報表
+        function toggleReconReport() {
+            var reconSection = document.getElementById('reconSection');
+            if (reconSection) {
+                if (reconSection.style.display === 'none') {
+                    reconSection.style.display = 'block';
+                } else {
+                    reconSection.style.display = 'none';
+                }
+            }
+        }
+
+        // 計算數據
+        function compute() {
+            const txs = state.transactions;
+            let bankBalance = 0;
+            let stockHoldings = {};
+            let totalDividend = 0;
+            let totalFees = 0;
+            let totalBuy = 0;
+            let totalSell = 0;
+
+            // 初始化每位合夥人餘額
+            const partnerBalances = {};
+            state.partners.forEach(p => { partnerBalances[p] = 0; });
+
+            txs.forEach(tx => {
+                const partner = tx.partner || 'NONE';
+                if (!partnerBalances[partner]) partnerBalances[partner] = 0;
+
+                if (tx.action === 'DEPOSIT' || tx.action === 'INTEREST') {
+                    bankBalance += tx.amount;
+                    partnerBalances[partner] += tx.amount;
+                } else if (tx.action === 'FEE') {
+                    bankBalance -= tx.amount;
+                    totalFees += tx.amount;
+                    partnerBalances[partner] -= tx.amount;
+                } else if (tx.action === 'BUY') {
+                    bankBalance -= (tx.price * tx.qty + tx.fee);
+                    totalBuy += tx.price * tx.qty;
+                    totalFees += tx.fee;
+                    partnerBalances[partner] -= (tx.price * tx.qty + tx.fee);
+                    if (!stockHoldings[tx.code]) stockHoldings[tx.code] = 0;
+                    stockHoldings[tx.code] += tx.qty;
+                } else if (tx.action === 'SELL') {
+                    bankBalance += (tx.price * tx.qty - tx.fee);
+                    totalSell += tx.price * tx.qty;
+                    totalFees += tx.fee;
+                    partnerBalances[partner] += (tx.price * tx.qty - tx.fee);
+                    if (!stockHoldings[tx.code]) stockHoldings[tx.code] = 0;
+                    stockHoldings[tx.code] -= tx.qty;
+                } else if (tx.action === 'DIVIDEND') {
+                    bankBalance += tx.amount;
+                    totalDividend += tx.amount;
+                    partnerBalances[partner] += tx.amount;
+                } else if (tx.action === 'RED_STOCK') {
+                    if (!stockHoldings[tx.code]) stockHoldings[tx.code] = 0;
+                    stockHoldings[tx.code] += tx.qty;
+                }
+            });
+
+            let stockValue = 0;
+            Object.keys(stockHoldings).forEach(code => {
+                stockValue += stockHoldings[code] * (state.stockPrices[code] || 0);
+            });
+
+            const totalAssets = bankBalance + stockValue;
+            const totalPrincipal = state.monthlyDeposit ? state.monthlyDeposit * 0 : 0;
+            const totalProfit = totalAssets - totalPrincipal;
+
+            return {
+                bankBalance,
+                stockValue,
+                totalAssets,
+                totalPrincipal: totalBuy,
+                totalProfit,
+                dividend: totalDividend,
+                partnerBalances,
+                txSummary: {
+                    deposit: 0,
+                    interest: 0,
+                    dividend: totalDividend,
+                    sellNet: totalSell,
+                    buyNet: totalBuy,
+                    fee: totalFees,
+                    redStockShares: 0
+                }
+            };
+        }
+
+        function monthsSinceStart() {
+            const start = new Date(state.startDate || '2018-03-01');
+            const now = new Date();
+            return (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+        }
+
+        function fmtMoney(v) {
+            return 'HK$ ' + parseFloat(v || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+
+        // 渲染
+        function render() {
+            try {
+                const c = compute();
+
+                const elCBal = document.getElementById('cBal');
+                if (elCBal) elCBal.textContent = fmtMoney(c.bankBalance);
+                const elSVal = document.getElementById('sVal');
+                if (elSVal) elSVal.textContent = fmtMoney(c.stockValue);
+                const elTAst = document.getElementById('tAst');
+                if (elTAst) elTAst.textContent = fmtMoney(c.totalAssets);
+                const elTPri = document.getElementById('tPri');
+                if (elTPri) elTPri.textContent = fmtMoney(c.totalPrincipal);
+                const elTPnl = document.getElementById('tPnl');
+                if (elTPnl) {
+                    elTPnl.textContent = fmtMoney(c.totalProfit);
+                    elTPnl.className = 'val ' + (c.totalProfit >= 0 ? 'pos' : 'neg');
+                }
+                const elTDiv = document.getElementById('tDiv');
+                if (elTDiv) elTDiv.textContent = fmtMoney(c.dividend);
+
+                // ��Ĺ��合夥人餘額表
+                const partnerTableBody = document.getElementById('partnerBalanceTableBody');
+                if (partnerTableBody && c.partnerBalances) {
+                    const months = monthsSinceStart();
+                    const expectedPerPartner = state.monthlyDeposit * months;
+                    const ratio = (100 / state.partners.length).toFixed(0) + '%';
+                    
+                    partnerTableBody.innerHTML = '';
+                    state.partners.forEach(function(p) {
+                        const name = state.partnerNames[p] || p;
+                        const actualDeposit = c.partnerBalances[p] || 0;
+                        const diff = expectedPerPartner - actualDeposit;
+                        const pnl = diff; // P&L distribution based on difference
+                        
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = '<td><strong>' + name + '</strong></td>' +
+                            '<td class="amt">' + fmtMoney(expectedPerPartner) + '</td>' +
+                            '<td class="amt">' + fmtMoney(actualDeposit) + '</td>' +
+                            '<td class="amt ' + (diff >= 0 ? 'pos' : 'neg') + '">' + fmtMoney(-diff) + '</td>' +
+                            '<td class="amt">' + fmtMoney(pnl) + '</td>' +
+                            '<td class="ctr">' + ratio + '</td>';
+                        partnerTableBody.appendChild(tr);
+                    });
+                }
+
+                const reconTb = document.getElementById('reconTableBody');
+                if (reconTb) {
+                    const ts = c.txSummary;
+                    reconTb.innerHTML = '<tr><td><strong>DEPOSIT</strong></td><td class="amt">' + fmtMoney(ts.deposit) + '</td></tr>' +
+                        '<tr><td><strong>INTEREST</strong></td><td class="amt">' + fmtMoney(ts.interest) + '</td></tr>' +
+                        '<tr><td><strong>DIVIDEND</strong></td><td class="amt">' + fmtMoney(ts.dividend) + '</td></tr>' +
+                        '<tr><td><strong>SELL (淨額 - FEE)</strong></td><td class="amt">' + fmtMoney(ts.sellNet) + '</td></tr>' +
+                        '<tr><td><strong>BUY (淨額 + FEE)</strong></td><td class="amt">' + fmtMoney(-ts.buyNet) + '</td></tr>' +
+                        '<tr><td><strong>FEE</strong></td><td class="amt">' + fmtMoney(-ts.fee) + '</td></tr>' +
+                        '<tr><td><strong>RED_STOCK (股)</strong></td><td class="amt">' + ts.redStockShares.toLocaleString() + ' 股</td></tr>' +
+                        '<tr style="background:#fef3c7;"><td><strong>對帳現金結餘</strong></td><td class="amt">' + fmtMoney(c.bankBalance) + '</td></tr>';
+                }
+
+                // 交易表格
+                const txBody = document.getElementById('txBody');
+                if (txBody) {
+                    const sorted = getSortedTxs();
+                    txBody.innerHTML = '';
+                    sorted.forEach(tx => {
+                        const tr = document.createElement('tr');
+                        const isSelected = window.selectedTxIds.has(tx.id);
+                        tr.innerHTML = '<td class="ctr"><input type="checkbox" class="txCheckbox" value="' + tx.id + '" ' + (isSelected ? 'checked' : '') + '></td>' +
+                            '<td>' + tx.date + '</td>' +
+                            '<td>' + tx.code + '</td>' +
+                            '<td>' + tx.action + '</td>' +
+                            '<td class="amt">' + tx.qty.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 4}) + '</td>' +
+                            '<td class="amt">' + fmtMoney(tx.fee) + '</td>' +
+                            '<td class="amt">' + fmtMoney(tx.amount) + '</td>' +
+                            '<td>' + (state.partnerNames[tx.partner] || tx.partner) + '</td>' +
+                            '<td>' + (tx.note || '') + '</td>' +
+                            '<td class="ctr"><button class="btn btn-sm btn-outline" onclick="editTransaction(\'' + tx.id + '\')">編輯</button> <button class="btn btn-sm btn-danger" onclick="deleteTx(\'' + tx.id + '\')">刪除</button></td>';
+                        txBody.appendChild(tr);
+                    });
+                }
+
+                // 合夥人列表
+                const partnerList = document.getElementById('partnerList');
+                if (partnerList) {
+                    partnerList.innerHTML = '';
+                    state.partners.forEach(p => {
+                        const div = document.createElement('div');
+                        div.className = 'partner-row';
+                        div.innerHTML = '<strong>' + (state.partnerNames[p] || p) + '</strong> (' + p + ') ' +
+                            '<button class="btn btn-sm btn-outline" onclick="renamePartner(\'' + p + '\')">重命名</button> ' +
+                            '<button class="btn btn-sm btn-danger" onclick="removePartner(\'' + p + '\')">刪除</button>';
+                        partnerList.appendChild(div);
+                    });
+                }
+
+                // 股票列表
+                const stockList = document.getElementById('stockList');
+                if (stockList) {
+                    stockList.innerHTML = '';
+                    state.stocks.forEach(code => {
+                        const div = document.createElement('div');
+                        div.className = 'partner-row';
+                        div.innerHTML = '<strong>' + code + '</strong> 價格: HK$ ' + (state.stockPrices[code] || 0).toFixed(2) + ' ' +
+                            '<button class="btn btn-sm btn-danger" onclick="removeStock(\'' + code + '\')">刪除</button>';
+                        stockList.appendChild(div);
+                    });
+                }
+
+                // 股票代號顯示
+                const stockCodesDisplay = document.getElementById('stockCodesDisplay');
+                if (stockCodesDisplay) {
+                    stockCodesDisplay.textContent = state.stocks.join(', ');
+                }
+
+                // 交易數量
+                const txCount = document.getElementById('txCount');
+                if (txCount) {
+                    txCount.textContent = state.transactions.length + ' 筆交易';
+                }
+            } catch(e) {
+                showAlert('渲染錯誤' + e.message, 'error');
+            }
+        }
+
+        function getSortedTxs() {
+            const sorted = [...state.transactions].sort((a, b) => {
+                if (window.txSort.key === 'date') {
+                    return window.txSort.dir === 'desc' ? (b.date < a.date ? -1 : 1) : (a.date < b.date ? -1 : 1);
+                }
+                return 0;
+            });
+            return sorted;
+        }
+
+        // 多選
+        function initMultiSelect() {
+            const txBody = document.getElementById('txBody');
+            if (txBody) {
+                txBody.addEventListener('change', function(e) {
+                    if (e.target && e.target.classList && e.target.classList.contains('txCheckbox')) {
+                        if (e.target.checked) {
+                            window.selectedTxIds.add(e.target.value);
+                        } else {
+                            window.selectedTxIds.delete(e.target.value);
+                        }
+                        render();
+                    }
+                });
+            }
+        }
+
+        function toggleSelectAll() {
+            const cb = document.getElementById('selectAllCb');
+            const checked = cb.checked;
+            document.querySelectorAll('.txCheckbox').forEach(c => {
+                c.checked = checked;
+                if (checked) window.selectedTxIds.add(c.value);
+                else window.selectedTxIds.delete(c.value);
+            });
+            render();
+        }
+
+        function selectAllTx() {
+            document.getElementById('selectAllCb').checked = true;
+            document.querySelectorAll('.txCheckbox').forEach(c => window.selectedTxIds.add(c.value));
+            render();
+        }
+
+        function deleteSelectedTx() {
+            if (window.selectedTxIds.size === 0) return;
+            if (!confirm('確定刪除 ' + window.selectedTxIds.size + ' 筆交易嗎？')) return;
+            var deletedCount = state.transactions.length;
+            state.transactions = state.transactions.filter(function(t) { return !window.selectedTxIds.has(t.id); });
+            window.selectedTxIds.clear();
+            save();
+            try {
+                render();
+            } catch(e) {
+                showAlert('刪除交易時發生錯誤' + e.message, 'error');
+                return;
+            }
+            if (state.transactions.length < deletedCount) {
+                showAlert('已刪除交易');
+            } else {
+                showAlert('刪除失敗', 'error');
+            }
+        }
+
+        function deleteTx(id) {
+            if (!confirm('確定刪除這筆交易嗎？')) return;
+            state.transactions = state.transactions.filter(function(t) { return t.id !== id; });
+            window.selectedTxIds.delete(id);
+            save(); render();
+        }
+
+        // 新增交易表單
+        function addTransactionForm() {
+            document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('txCode').value = '00003.HK';
+            document.getElementById('txCurrency').value = 'HKD';
+            document.getElementById('txAction').value = 'BUY';
+            document.getElementById('txPrice').value = '';
+            document.getElementById('txQty').value = '';
+            document.getElementById('txFee').value = '0';
+            document.getElementById('txPartner').value = state.partners[0] || 'NONE';
+            document.getElementById('txNote').value = '';
+            editingTxId = null;
+            document.getElementById('btnCancelEdit').style.display = 'none';
+            document.querySelector('.btn-primary[onclick="addTransaction()"]').textContent = '新增交易';
+        }
+
+        function addTransaction() {
+            var date = document.getElementById('txDate').value;
+            var code = document.getElementById('txCode').value.trim() || 'CASH';
+            var currency = document.getElementById('txCurrency').value;
+            var action = document.getElementById('txAction').value;
+            var price = parseFloat(document.getElementById('txPrice').value) || 0;
+            var qty = parseFloat(document.getElementById('txQty').value) || 0;
+            var fee = parseFloat(document.getElementById('txFee').value) || 0;
+            var partner = document.getElementById('txPartner').value;
+            var note = document.getElementById('txNote').value.trim();
+
+            if (!date) { showAlert('請選擇日期', 'error'); return; }
+
+            var amount = 0;
+            if (action === 'BUY' || action === 'SELL') amount = price * qty;
+            else amount = price;
+
+            if (editingTxId) {
+                var txIdx = state.transactions.findIndex(function(t) { return t.id === editingTxId; });
+                if (txIdx >= 0) {
+                    state.transactions[txIdx] = { id: editingTxId, date: date, code: code, currency: currency, action: action, price: price, qty: qty, fee: fee, amount: amount, partner: partner, note: note };
+                    ensureStock(code);
+                    save(); render();
+                    editingTxId = null;
+                    document.getElementById('btnCancelEdit').style.display = 'none';
+                    document.querySelector('.btn-primary[onclick="addTransaction()"]').textContent = '新增交易';
+                    showAlert('交易已更新');
+                }
+            } else {
+                var tx = { id: makeId(), date: date, code: code, currency: currency, action: action, price: price, qty: qty, fee: fee, amount: amount, partner: partner, note: note };
+                state.transactions.push(tx);
+                ensureStock(code);
+                save(); render();
+                showAlert('交易已新增');
+            }
+            document.getElementById('txPrice').value = '';
+            document.getElementById('txQty').value = '';
+            document.getElementById('txFee').value = '0';
+            document.getElementById('txNote').value = '';
+        }
+
+        function editTransaction(id) {
+            var tx = state.transactions.find(function(t) { return t.id === id; });
+            if (!tx) return;
+            document.getElementById('txDate').value = tx.date;
+            document.getElementById('txCode').value = tx.code;
+            document.getElementById('txCurrency').value = tx.currency;
+            document.getElementById('txAction').value = tx.action;
+            document.getElementById('txPrice').value = tx.price;
+            document.getElementById('txQty').value = tx.qty;
+            document.getElementById('txFee').value = tx.fee;
+            document.getElementById('txPartner').value = tx.partner;
+            document.getElementById('txNote').value = tx.note || '';
+            editingTxId = id;
+            document.getElementById('btnCancelEdit').style.display = 'inline-block';
+            document.querySelector('.btn-primary[onclick="addTransaction()"]').textContent = '更新交易';
+            showAlert('編輯模式已啟用');
+        }
+
+        function cancelEdit() {
+            editingTxId = null;
+            document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('txCode').value = '';
+            document.getElementById('txCurrency').value = 'HKD';
+            document.getElementById('txAction').value = 'BUY';
+            document.getElementById('txPrice').value = '';
+            document.getElementById('txQty').value = '';
+            document.getElementById('txFee').value = '0';
+            document.getElementById('txPartner').value = state.partners[0] || 'NONE';
+            document.getElementById('txNote').value = '';
+            document.getElementById('btnCancelEdit').style.display = 'none';
+            document.querySelector('.btn-primary[onclick="addTransaction()"]').textContent = '新增交易';
+        }
+
+        // 合夥人
+        function addPartner() {
+            var name = document.getElementById('newPartnerName').value.trim();
+            if (!name) { showAlert('請輸入合夥人名稱', 'error'); return; }
+            var key = name.charAt(0).toUpperCase();
+            state.partners.push(key);
+            state.partnerNames[key] = name;
+            save(); render();
+            document.getElementById('newPartnerName').value = '';
+            showAlert('合夥人已新增');
+        }
+        function removePartner(key) {
+            if (state.partners.length <= 1) { showAlert('至少需要一位合夥人', 'error'); return; }
+            state.partners = state.partners.filter(function(p) { return p !== key; });
+            delete state.partnerNames[key];
+            save(); render();
+            showAlert('合夥人已刪除');
+        }
+        function renamePartner(key, name) { state.partnerNames[key] = name; save(); render(); }
+
+        // 股票
+        function addStock() {
+            var code = document.getElementById('newStockCode').value.trim().toUpperCase();
+            if (!code) { showAlert('請輸入股票代號', 'error'); return; }
+            if (state.stocks.includes(code)) { showAlert('股票代號已存在', 'error'); return; }
+            state.stocks.push(code);
+            state.stockPrices[code] = 0;
+            save(); render();
+            document.getElementById('newStockCode').value = '';
+            showAlert('股票已新增');
+        }
+        function removeStock(code) {
+            state.stocks = state.stocks.filter(function(c) { return c !== code; });
+            delete state.stockPrices[code];
+            save(); render();
+            showAlert('股票已刪除');
+        }
+        function renameStock(oldCode, newCode) {
+            var idx = state.stocks.indexOf(oldCode);
+            if (idx < 0) return;
+            state.stocks[idx] = newCode.toUpperCase();
+            if (state.stockPrices[oldCode] !== undefined) {
+                state.stockPrices[newCode.toUpperCase()] = state.stockPrices[oldCode];
+                delete state.stockPrices[oldCode];
+            }
+            state.transactions.forEach(function(t) { if (t.code === oldCode) t.code = newCode.toUpperCase(); });
+            save(); render();
+        }
+
+        function resetAllData() {
+            if (!confirm('確定重置所有資料嗎？此操作無法復原。')) return;
+            localStorage.removeItem('inv_state_v2');
+            location.reload();
+        }
+
+        function bulkUpdatePrices() {
+            var input = document.getElementById('quickPriceInput').value.trim();
+            if (!input) {
+                var codes = state.stocks.join(', ');
+                showAlert('請輸入股票代號與價格，格式：代號:價格，例如：00003.HK,6.5\n\n目前股票代號：' + codes, 'error');
+                return;
+            }
+            input.split(',').forEach(function(pair) {
+                var parts = pair.split(':').map(function(s) { return s.trim(); });
+                if (parts[0] && parts[1]) { state.stockPrices[parts[0]] = parseFloat(parts[1]); }
+            });
+            save(); render();
+            showAlert('股價已更新');
+        }
+
+        // 股息計算器
+        function calculateDividend() {
+            var code = document.getElementById('divCode').value.trim().toUpperCase() || '00003.HK';
+            var shares = parseFloat(document.getElementById('divShares').value) || 0;
+            var perShare = parseFloat(document.getElementById('divPerShare').value) || 0;
+            var frequency = parseInt(document.getElementById('divFrequency').value) || 1;
+            var taxRate = parseFloat(document.getElementById('divTaxRate').value) || 0;
+
+            if (shares <= 0) { showAlert('請輸入持股數', 'error'); return; }
+            if (perShare <= 0) { showAlert('請輸入每股股息', 'error'); return; }
+
+            var perPayment = shares * perShare;
+            var grossAnnual = perPayment * frequency;
+            var taxAmount = grossAnnual * (taxRate / 100);
+            var netAnnual = grossAnnual - taxAmount;
+
+            document.getElementById('resCode').textContent = code;
+            document.getElementById('resShares').textContent = shares.toLocaleString();
+            document.getElementById('resPerShare').textContent = 'HK$ ' + perShare.toFixed(4);
+            document.getElementById('resFreq').textContent = frequency + ' 次';
+            document.getElementById('resTaxRate').textContent = taxRate + '%';
+            document.getElementById('resPerPayment').textContent = 'HK$ ' + perPayment.toFixed(2);
+            document.getElementById('resGross').textContent = 'HK$ ' + grossAnnual.toFixed(2);
+            document.getElementById('resNet').textContent = 'HK$ ' + netAnnual.toFixed(2);
+            document.getElementById('resTax').textContent = 'HK$ ' + taxAmount.toFixed(2);
+
+            document.getElementById('dividendResult').style.display = 'block';
+        }
+
+        function clearDividend() {
+            document.getElementById('divShares').value = '';
+            document.getElementById('divPerShare').value = '';
+            document.getElementById('divTaxRate').value = '0';
+            document.getElementById('dividendResult').style.display = 'none';
+        }
+
+        // 複利計算
+        function calculateCompoundDividend() {
+            var code = document.getElementById('divCode').value.trim().toUpperCase() || '00003.HK';
+            var initShares = parseFloat(document.getElementById('divShares').value) || 0;
+            var perShare = parseFloat(document.getElementById('divPerShare').value) || 0;
+            var frequency = parseInt(document.getElementById('divFrequency').value) || 1;
+            var taxRate = parseFloat(document.getElementById('divTaxRate').value) || 0;
+            var years = parseFloat(document.getElementById('compYears').value) || 0;
+            var price = parseFloat(document.getElementById('compPrice').value) || 0;
+            var reinvest = parseInt(document.getElementById('compReinvest').value) || 1;
+
+            if (initShares <= 0) { showAlert('請輸入持股數', 'error'); return; }
+            if (perShare <= 0) { showAlert('請輸入每股股息', 'error'); return; }
+            if (years <= 0) { showAlert('請輸入年數', 'error'); return; }
+            if (reinvest === 1 && price <= 0) { showAlert('請輸入目前股價', 'error'); return; }
+
+            var currentShares = initShares;
+            var totalGross = 0;
+            var totalTax = 0;
+            var periods = years * frequency;
+            var perPeriodShares = perShare;
+            var yearlyDetails = [];
+            var sharesBeforeYear = initShares;
+            var periodsPerYear = frequency;
+
+            for (var y = 1; y <= years; y++) {
+                var yearGross = 0;
+                var yearTax = 0;
+                var yearNet = 0;
+                var yearNewShares = 0;
+
+                for (var p = 1; p <= periodsPerYear; p++) {
+                    var payment = currentShares * perPeriodShares;
+                    var tax = payment * (taxRate / 100);
+                    var net = payment - tax;
+                    yearGross += payment;
+                    yearTax += tax;
+                    yearNet += net;
+
+                    if (reinvest === 1 && price > 0) {
+                        var newShares = net / price;
+                        yearNewShares += newShares;
+                        currentShares += newShares;
+                    }
+                }
+
+                yearlyDetails.push({
+                    year: y,
+                    sharesStart: sharesBeforeYear,
+                    sharesEnd: currentShares,
+                    newShares: yearNewShares,
+                    gross: yearGross,
+                    tax: yearTax,
+                    net: yearNet
+                });
+                sharesBeforeYear = currentShares;
+            }
+
+            var totalNet = totalGross - totalTax;
+            for (var i = 0; i < yearlyDetails.length; i++) {
+                totalGross += yearlyDetails[i].gross;
+                totalTax += yearlyDetails[i].tax;
+            }
+            totalNet = totalGross - totalTax;
+
+            var finalValue = currentShares * price;
+            var initialValue = initShares * price;
+            var totalReturn = price > 0 ? ((finalValue - initialValue) / initialValue * 100) : 0;
+            var cagr = price > 0 && years > 0 ? Math.pow((finalValue / initialValue), (1 / years)) - 1 : 0;
+            var cagrPct = cagr * 100;
+
+            document.getElementById('resCompYears').textContent = years + ' 年';
+            document.getElementById('resCompPrice').textContent = 'HK$ ' + price.toFixed(2);
+            document.getElementById('resCompReinvest').textContent = reinvest === 1 ? '是 (DRIP)' : '否 (現金)';
+            document.getElementById('resCompInitShares').textContent = initShares.toLocaleString();
+            document.getElementById('resCompFinalShares').textContent = currentShares.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
+            document.getElementById('resCompAddedShares').textContent = (currentShares - initShares).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
+            document.getElementById('resCompGross').textContent = 'HK$ ' + totalGross.toFixed(2);
+            document.getElementById('resCompNet').textContent = 'HK$ ' + totalNet.toFixed(2);
+            document.getElementById('resCompFinalValue').textContent = 'HK$ ' + finalValue.toFixed(2);
+            document.getElementById('resCompROI').textContent = totalReturn.toFixed(2) + '%';
+            document.getElementById('resCompTotalReturn').textContent = totalReturn.toFixed(2) + '%';
+            document.getElementById('resCompInitialValue').textContent = 'HK$ ' + initialValue.toFixed(2);
+            document.getElementById('resCompCAGR').textContent = cagrPct.toFixed(2) + '%';
+
+            var tbody = document.getElementById('compoundYearlyBody');
+            if (tbody) {
+                tbody.innerHTML = '';
+                yearlyDetails.forEach(function(d) {
+                    var tr = document.createElement('tr');
+                    tr.innerHTML = '<td>' + d.year + '</td>' +
+                        '<td class="amt">' + d.sharesStart.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2}) + '</td>' +
+                        '<td class="amt">' + d.sharesEnd.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2}) + '</td>' +
+                        '<td class="amt">' + d.newShares.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2}) + '</td>' +
+                        '<td class="amt">HK$ ' + d.gross.toFixed(2) + '</td>' +
+                        '<td class="amt">HK$ ' + d.tax.toFixed(2) + '</td>' +
+                        '<td class="amt">HK$ ' + d.net.toFixed(2) + '</td>';
+                    tbody.appendChild(tr);
+                });
+            }
+
+            document.getElementById('compoundResult').style.display = 'block';
+        }
+
+        function clearCompoundDividend() {
+            document.getElementById('compYears').value = '10';
+            document.getElementById('compPrice').value = '';
+            document.getElementById('compReinvest').value = '1';
+            document.getElementById('compoundResult').style.display = 'none';
+        }
+
+        // CSV 匯入
+        function parseCSVFile() {
+            var input = document.getElementById('csvFile');
+            var f = input.files[0];
+            if (!f) { showAlert('請選擇 CSV 檔案', 'error'); return; }
+
+            var reader = new FileReader();
+            reader.readAsArrayBuffer(f);
+            reader.onload = function(ev) {
+                try {
+                    var buffer = ev.target.result;
+                    var bytes = new Uint8Array(buffer);
+                    if (bytes.length >= 3 && bytes[0]===0xEF && bytes[1]===0xBB && bytes[2]===0xBF) {
+                        bytes = bytes.slice(3);
+                    }
+
+                    var text = '';
+                    var usedEncoding = 'UTF-8';
+                    try {
+                        text = new TextDecoder('UTF-8').decode(bytes);
+                        if (text.includes('\uFFFD')) throw new Error('UTF-8 decode has replacement char');
+                        usedEncoding = 'UTF-8';
+                    } catch (e) {
+                        try {
+                            text = new TextDecoder('GBK').decode(bytes);
+                            usedEncoding = 'GBK';
+                        } catch (e2) {
+                            text = new TextDecoder('Big5').decode(bytes);
+                            usedEncoding = 'Big5';
+                        }
+                    }
+
+                    var lines = text.split(/\r?\n/).filter(function(l) { return l.trim(); });
+                    if (lines.length < 2) { showAlert('CSV 檔案格式錯誤', 'error'); return; }
+
+                    var header = lines[0].split(',').map(function(h) { return h.trim().replace(/\ufeff/g, ''); });
+                    var requiredCols = ['Date','Code','Action'];
+                    var missing = requiredCols.filter(function(c) { return header.indexOf(c) < 0; });
+                    if (missing.length > 0) {
+                        showAlert('CSV 缺少欄位：' + missing.join(', ') + ' 請參考範本格式', 'error');
+                        return;
+                    }
+
+                    var imported = 0, skipped = 0, errors = [];
+                    lines.slice(1).forEach(function(line, idx) {
+                        var rowNum = idx + 2;
+                        var cols = line.split(',');
+                        if (cols.length < 7) { skipped++; return; }
+                        var row = {};
+                        header.forEach(function(h, i) { row[h] = (cols[i] || '').trim(); });
+
+                        if (!row['Date']) {
+                            errors.push('第 ' + rowNum + ' 行缺少日期');
+                            skipped++;
+                            return;
+                        }
+
+                        var actionForValidation = row['Action'];
+                        if (actionForValidation.toUpperCase().trim() === 'RED STOCK') actionForValidation = 'RED_STOCK';
+                        var validActions = ['BUY','SELL','DIVIDEND','RED_STOCK','INTEREST','DEPOSIT','FEE'];
+                        if (validActions.indexOf(actionForValidation) < 0) {
+                            errors.push('第 ' + rowNum + ' 行動作無效："' + row['Action'] + '"');
+                            skipped++;
+                            return;
+                        }
+
+                        var tx = csvRowToTx(row);
+                        if (tx) {
+                            state.transactions.push(tx);
+                            ensureStock(tx.code);
+                            imported++;
+                        } else {
+                            skipped++;
+                        }
+                    });
+
+                    save(); render();
+                    var msg = '已匯入 ' + imported + ' 筆交易';
+                    if (skipped > 0) msg += '，跳過 ' + skipped + ' 筆';
+                    if (errors.length > 0) msg += '\n錯誤：\n' + errors.slice(0,10).join('\n');
+                    showAlert(msg, errors.length > 0 ? 'error' : 'success');
+                } catch(e) {
+                    showAlert('匯入失敗：' + e.message, 'error');
+                }
+            };
+        }
+
+        function csvRowToTx(row) {
+            var date = row['Date'];
+            var code = row['Code'] || 'CASH';
+            var action = row['Action'] || '';
+            if (action.toUpperCase().trim() === 'RED STOCK') action = 'RED_STOCK';
+            var price = parseFloat(row['Price']) || 0;
+            var qty = parseFloat(row['Quantity']) || 0;
+            var fee = parseFloat(row['FEE']) || 0;
+            var currency = row['Currency'] || 'HKD';
+            var note = row['Note'] || '';
+            var partner = row['Partner'] || 'NONE';
+
+            if (!partner || partner === 'all' || partner.toUpperCase() === 'NONE') {
+                partner = 'NONE';
+            }
+
+            if (!date || !action) return null;
+
+            var normDate = date;
+            var m = date.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+            if (m) normDate = m[3] + '-' + m[2] + '-' + m[1];
+
+            var amount = 0;
+            if (action === 'BUY' || action === 'SELL') amount = price * qty;
+            else if (action === 'INTEREST' || action === 'DEPOSIT') amount = price;
+            else if (action === 'DIVIDEND') {
+                amount = (qty > 0) ? price * qty : price;
+            }
+            else if (action === 'FEE') amount = fee;
+            else if (action === 'RED_STOCK') amount = 0;
+
+            return {
+                id: makeId(),
+                date: normDate,
+                code: code,
+                currency: currency,
+                action: action,
+                price: price,
+                qty: qty,
+                fee: fee,
+                amount: amount,
+                partner: partner,
+                note: note
+            };
+        }
+
+        // JSON 備份
+        function exportJSON() {
+            var blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = '投資戶口備份_' + new Date().toISOString().split('T')[0] + '.json';
+            a.click();
+        }
+
+        function importJSONFile() {
+            var input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = function(e) {
+                var f = e.target.files[0];
+                if (!f) return;
+                var reader = new FileReader();
+                reader.onload = function(ev) {
+                    try {
+                        var parsed = JSON.parse(ev.target.result);
+                        state = { ...state, ...parsed };
+                        if (!state.partnerNames) state.partnerNames = {};
+                        if (!state.stockPrices) state.stockPrices = {};
+                        save(); render();
+                        showAlert('JSON 已還原');
+                    } catch(err) {
+                        showAlert('JSON 還原失敗：' + err.message, 'error');
+                    }
+                };
+                reader.readAsText(f);
+            };
+            input.click();
+        }
+
+        // 警告
+        function showAlert(msg, type) {
+            var el = document.getElementById('alert');
+            el.textContent = msg;
+            el.className = 'alert ' + (type || 'success');
+            el.style.display = 'block';
+            setTimeout(function() { el.style.display = 'none'; }, 5000);
+        }
+
+        function makeId() {
+            return 'tx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+        }
+
+        // 啟動
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>
