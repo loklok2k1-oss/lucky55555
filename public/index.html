@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>投資合伙戶口管理系統 v3.2.0</title>
+<style>
+* { box-sizing: border-box; font-family: 'Microsoft JhengHei', 'PingFang TC', 'Heiti TC', sans-serif; }
+body { margin: 0; padding: 16px; background: #f3f4f6; color: #1f2937; line-height: 1.5; }
+.container { max-width: 1400px; margin: 0 auto; }
+h1 { text-align: center; color: #1e3a5f; font-size: 24px; margin-bottom: 4px; }
+.version { text-align: center; color: #9ca3af; font-size: 12px; margin-bottom: 8px; }
+.subtitle { text-align: center; color: #6b7280; font-size: 13px; margin-bottom: 20px; }
+h2 { font-size: 18px; color: #1e3a5f; margin-top: 24px; margin-bottom: 12px; border-bottom: 2px solid #e5e7eb; padding-bottom: 6px; }
+h3 { font-size: 15px; color: #374151; margin-top: 18px; margin-bottom: 8px; }
+.dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.card { background: #fff; border-radius: 8px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
+.card .lbl { font-size: 12px; color: #6b7280; margin-bottom: 6px; }
+.card .val { font-size: 20px; font-weight: bold; color: #111827; }
+.card .val.pos { color: #059669; } .card .val.neg { color: #dc2626; } .card .val.hl { color: #d97706; }
+.section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.section-title { font-size: 16px; font-weight: bold; color: #1e3a5f; margin-bottom: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: center; }
+th { background: #1e3a5f; color: #fff; font-weight: 600; font-size: 12px; }
+tr:nth-child(even) { background: #f9fafb; }
+td.amt { text-align: right; font-variant-numeric: tabular-nums; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; align-items: end; }
+.form-group { display: flex; flex-direction: column; gap: 4px; }
+.form-group label { font-size: 12px; font-weight: 600; color: #374151; }
+.form-group input, .form-group select { padding: 7px 9px; border: 1px solid #d1d5db; border-radius: 5px; font-size: 13px; }
+button.btn { padding: 8px 14px; border-radius: 5px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; }
+button.btn:hover { opacity: 0.9; }
+button.btn-primary { background: #2563eb; color: #fff; }
+button.btn-danger { background: #dc2626; color: #fff; }
+button.btn-success { background: #059669; color: #fff; }
+button.btn-outline { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+button.btn-sm { padding: 6px 10px; font-size: 12px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 0; margin-bottom: 16px; border-bottom: 2px solid #e5e7eb; }
+.tab { padding: 10px 18px; background: #f3f4f6; color: #4b5563; cursor: pointer; border: none; font-size: 13px; font-weight: 600; border-bottom: 2px solid transparent; }
+.tab.active { background: #fff; color: #2563eb; border-bottom-color: #2563eb; }
+.tab-content { display: none; } .tab-content.active { display: block; }
+.controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+.partner-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+.alert { padding: 10px 14px; border-radius: 5px; margin-bottom: 16px; font-size: 13px; display: none; }
+.alert.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.alert.success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
+.csv-template { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 12px; margin-top: 10px; overflow-x: auto; }
+.enc-hint { font-size: 11px; color: #6b7280; margin-top: 6px; }
+#loginBox { max-width: 420px; margin: 60px auto; background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+</style>
+</head>
+<body>
+<div class="container">
+  <div id="loginBox">
+    <h1>投資合伙戶口管理系統</h1>
+    <div class="version">v3.2.0 — 獨立站（Node.js + SQLite）</div>
+    <p style="font-size:13px;color:#6b7280">請輸入管理密碼先可以睇到合夥戶口資料。預設密碼係 <code>partnership-2026</code>，請喺 <code>config.json</code> 即刻改咗佢。</p>
+    <div class="form-group"><label>管理密碼</label><input type="password" id="loginPw" placeholder="管理密碼"></div>
+    <div style="margin-top:12px"><button class="btn btn-primary" onclick="doLogin()">登入</button></div>
+    <div id="loginErr" style="color:#dc2626;font-size:13px;margin-top:8px"></div>
+  </div>
+
+  <div id="app" style="display:none">
+    <h1>投資合伙戶口管理系統</h1>
+    <div class="version">v3.2.0 — 獨立站（Node.js + Express + SQLite）</div>
+    <div class="subtitle">高息定投合夥戶口 · 00003.HK 煤氣 · 合夥人 A 樂、B 暉、C 源、D 啤、E 英 · 每月應存 HK$500 · 起始 2018-03-01</div>
+    <div style="text-align:right;margin-bottom:12px"><button class="btn btn-outline btn-sm" onclick="logout()">登出</button></div>
+    <div id="alert" class="alert"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="dashboard">總覽</button>
+      <button class="tab" data-tab="monitor">監察</button>
+      <button class="tab" data-tab="transactions">交易記錄</button>
+      <button class="tab" data-tab="import">匯入 CSV</button>
+      <button class="tab" data-tab="admin">後台管理</button>
+      <button class="tab" data-tab="dividend">📈 股息計算器</button>
+    </div>
+
+    <div id="tab-dashboard" class="tab-content active">
+      <div class="dashboard">
+        <div class="card"><div class="lbl">銀行現金結餘</div><div class="val" id="cBal">HK$ 0.00</div></div>
+        <div class="card"><div class="lbl">持有股票總市值</div><div class="val" id="sVal">HK$ 0.00</div></div>
+        <div class="card"><div class="lbl">總資產</div><div class="val" id="tAst">HK$ 0.00</div></div>
+        <div class="card"><div class="lbl">投入本金（存入總和）</div><div class="val" id="tPri">HK$ 0.00</div></div>
+        <div class="card"><div class="lbl">總盈虧（總資產 − 本金）</div><div class="val" id="tPnl">HK$ 0.00</div></div>
+        <div class="card"><div class="lbl">累計股息</div><div class="val" id="tDiv">HK$ 0.00</div></div>
+        <div class="card"><div class="lbl">總回報率</div><div class="val" id="tRet">0%</div></div>
+        <div class="card"><div class="lbl">年化報酬率 (CAGR)</div><div class="val" id="tCagr">0%</div></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">👥 合夥人餘額表</div>
+        <p class="enc-hint">「實際存入」= 該合夥人 DEPOSIT 總和（唔係淨結餘）。「盈虧分佈」= 持股比例 × 總盈虧。差額正數 = 多存咗，負數 = 未存夠。</p>
+        <table><thead><tr><th>合夥人</th><th>應存金額</th><th>實際存入</th><th>差額（實存 − 應存）</th><th>盈虧分佈</th><th>持股比例</th></tr></thead><tbody id="partnerBalanceTableBody"></tbody></table>
+      </div>
+
+      <div class="section">
+        <div class="section-title">📈 持股</div>
+        <table><thead><tr><th>股票</th><th>股數</th><th>平均買入價</th><th>目前股價</th><th>升跌</th><th>市值</th><th>未實現盈虧</th></tr></thead><tbody id="holdingBody"></tbody></table>
+      </div>
+
+      <div class="section">
+        <div class="section-title">📈 股價自動更新（Yahoo）</div>
+        <div class="controls">
+          <button class="btn btn-success" onclick="refreshPrices()">立即更新股價</button>
+          <span id="priceUpdatedAt" style="font-size:13px;color:#6b7280"></span>
+        </div>
+        <div class="enc-hint">伺服器啟動嗰陣自動更新一次，之後每 30 分鐘更新一次，唔使手動輸入。Yahoo 報價約 15 分鐘延遲，收市後係收市價。</div>
+        <details style="margin-top:10px">
+          <summary style="font-size:13px;cursor:pointer">手動輸入（Yahoo 攞唔到先用）</summary>
+          <div class="form-grid" style="margin-top:10px">
+            <div class="form-group"><label>股票代號與價格（接受 00003.HK:6.5 或 00003.HK,6.5，多隻用空格分開）</label><input type="text" id="quickPriceInput" placeholder="例如 00003.HK:6.5"></div>
+            <button class="btn btn-primary" onclick="bulkUpdatePrices()">批次更新</button>
+          </div>
+        </details>
+        <div class="enc-hint">目前股票代號：<span id="stockCodesDisplay">-</span></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">💾 備份</div>
+        <div class="controls">
+          <button class="btn btn-outline" onclick="exportJSON()">匯出 JSON 備份</button>
+          <button class="btn btn-outline" onclick="document.getElementById('jsonFile').click()">匯入 JSON 還原</button>
+          <input type="file" id="jsonFile" accept=".json" style="display:none">
+          <button class="btn btn-outline" onclick="exportCSV()">匯出 CSV</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-monitor" class="tab-content">
+      <div class="section">
+        <div class="section-title">👀 監察股票 — 以高息股資料為主</div>
+        <p class="enc-hint"><strong>買賣建議公式（只供參考，唔係投資建議）：</strong><br>
+        52 週位置 =（現價 − 52 週低）÷（52 週高 − 52 週低）× 100%　|　息率 = 每股股息 ÷ 現價 × 100%<br>
+        每股股息優先次序：手動輸入 → 帳目近 12 個月股息 ÷ 現持股數 → 報價渠道<br>
+        判斷次序：現價 ≤ 0 → 未有判斷；位置 ≥ 85% → 有持股減持、未持有觀望（高位優先，就算息率達標都唔出買入）；息率 ≥ 5% 且（冇 52 週數據或位置 ≤ 50%）→ 買入；息率 &lt; 3% 且位置 ≥ 70% → 觀望；其餘有持股 → 持有，無持股 → 觀望。<br>
+        注意：位置標籤 ≥ 80% 已叫「高位」，但訊號要 ≥ 85% 先觸發，兩者門檻唔同。</p>
+        <div id="monitorCards"></div>
+        <div class="controls" style="margin-top:12px">
+          <input type="text" id="watchCode" placeholder="加監察股票，例如 0700.HK" style="padding:7px 9px;border:1px solid #d1d5db;border-radius:5px;font-size:13px">
+          <button class="btn btn-primary" onclick="addWatchStock()">加入監察</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-transactions" class="tab-content">
+      <div class="section">
+        <div class="section-title">📝 新增／編輯交易</div>
+        <div class="form-grid">
+          <div class="form-group"><label>日期</label><input type="date" id="txDate"></div>
+          <div class="form-group"><label>代號</label><input type="text" id="txCode" value="00003.HK"></div>
+          <div class="form-group"><label>動作</label><select id="txAction"><option>BUY</option><option>SELL</option><option>DEPOSIT</option><option>DIVIDEND</option><option>INTEREST</option><option>FEE</option><option>RED_STOCK</option></select></div>
+          <div class="form-group"><label>價格／金額（DEPOSIT、INTEREST、DIVIDEND 填總金額）</label><input type="number" id="txPrice" step="0.0001" min="0"></div>
+          <div class="form-group"><label>股數</label><input type="number" id="txQty" step="0.0001" min="0"></div>
+          <div class="form-group"><label>手費</label><input type="number" id="txFee" step="0.01" min="0" value="0"></div>
+          <div class="form-group"><label>合夥人</label><select id="txPartner"></select></div>
+          <div class="form-group"><label>備註</label><input type="text" id="txNote"></div>
+        </div>
+        <div class="controls">
+          <button class="btn btn-primary" id="btnSaveTx" onclick="saveTransaction()">新增交易</button>
+          <button class="btn btn-outline" id="btnCancelEdit" style="display:none" onclick="cancelEdit()">取消編輯</button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">📝 交易記錄 <span id="txCount" style="font-weight:normal;font-size:13px"></span></div>
+        <div class="controls">
+          <select id="filterAction" onchange="loadTx()"><option value="">全部動作</option><option>BUY</option><option>SELL</option><option>DEPOSIT</option><option>DIVIDEND</option><option>INTEREST</option><option>FEE</option><option>RED_STOCK</option></select>
+          <select id="filterPartner" onchange="loadTx()"><option value="">全部合夥人</option></select>
+          <button class="btn btn-outline" onclick="selectAllTx()">全選</button>
+          <button class="btn btn-danger" onclick="deleteSelectedTx()">刪除選中</button>
+        </div>
+        <table><thead><tr><th style="width:40px"><input type="checkbox" id="selectAllCb" onchange="toggleSelectAll()"></th><th>日期</th><th>代號</th><th>動作</th><th>股數</th><th>手費</th><th>金額</th><th>合夥人</th><th>備註</th><th style="width:100px">操作</th></tr></thead><tbody id="txBody"></tbody></table>
+      </div>
+    </div>
+
+    <div id="tab-import" class="tab-content">
+      <div class="section">
+        <div class="section-title">📥 匯入 CSV</div>
+        <div class="controls"><input type="file" id="csvFile" accept=".csv"></div>
+        <p class="enc-hint">伺服器會自動試 UTF-8 → Big5 → GBK（你嗰個檔係 GBK）。接受兩種欄位順序，按欄名認，唔按位置。日期接受 DD-MM-YYYY 同 YYYY-MM-DD。重複交易（日期＋代號＋動作＋價錢＋股數＋手費＋合夥人＋備註完全一樣）會自動跳過，唔會重複入。</p>
+        <div class="csv-template"><strong>CSV 欄位格式：</strong> Date,Code,Currency,Price,Quantity,Action,FEE,Partner,Note
+<pre>21-06-2021,00003.HK,HKD,0,326,RED_STOCK,0,NONE,紅股326
+18-06-2026,00003.HK,HKD,6831.4,0,DIVIDEND,0,NONE,股息0.23
+21-10-2026,CASH,HKD,3050.4,0,DEPOSIT,0,A,樂</pre></div>
+        <p class="enc-hint">留意：DEPOSIT／DIVIDEND／INTEREST 嘅金額係填喺 Price 欄；FEE 嘅金額係填喺 FEE 欄。</p>
+      </div>
+    </div>
+
+    <div id="tab-admin" class="tab-content">
+      <div class="section">
+        <div class="section-title">⚙️ 後台管理</div>
+        <h3>合夥人管理</h3>
+        <div class="controls"><input type="text" id="newPartnerName" placeholder="合夥人名稱（例如 英）"><input type="text" id="newPartnerKey" placeholder="代號（例如 F，可留空）" style="width:160px"><button class="btn btn-primary" onclick="addPartner()">新增合夥人</button></div>
+        <div id="partnerList"></div>
+        <h3>股票管理</h3>
+        <div class="controls"><input type="text" id="newStockCode" placeholder="股票代號 (例如 00003.HK)"><button class="btn btn-primary" onclick="addStock()">新增股票</button></div>
+        <div id="stockList"></div>
+        <h3>設定</h3>
+        <div class="form-grid">
+          <div class="form-group"><label>每月應存 (HK$)</label><input type="number" id="setMonthly" step="1" min="0"></div>
+          <div class="form-group"><label>起始日期</label><input type="date" id="setStart"></div>
+          <button class="btn btn-primary" onclick="saveSettings()">儲存設定</button>
+        </div>
+        <button class="btn btn-danger" onclick="resetAllData()">重置所有交易資料</button>
+        <p class="enc-hint">重置只會清走交易，唔會清合夥人同股票。重置前請先匯出 JSON 備份。</p>
+      </div>
+    </div>
+
+    <div id="tab-dividend" class="tab-content">
+      <div class="section">
+        <div class="section-title">📈 股息計算器</div>
+        <div class="form-grid">
+          <div class="form-group"><label>股票代碼</label><input type="text" id="divCode" value="00003.HK"></div>
+          <div class="form-group"><label>初始持股數</label><input type="number" id="divShares" step="0.0001" min="0"></div>
+          <div class="form-group"><label>每股股息 (HKD)</label><input type="number" id="divPerShare" step="0.0001" min="0"></div>
+          <div class="form-group"><label>派息頻率</label><select id="divFrequency"><option value="1">每年 1 次</option><option value="2">每年 2 次</option><option value="4">每年 4 次</option><option value="12">每月 1 次</option></select></div>
+          <div class="form-group"><label>稅率 (%)</label><input type="number" id="divTaxRate" step="0.1" min="0" max="100" value="0"></div>
+          <div class="form-group"><button class="btn btn-primary" onclick="calculateDividend()">計算股息</button> <button class="btn btn-outline" onclick="clearDividend()">清除</button></div>
+        </div>
+        <div id="dividendResult" style="display:none;margin-top:16px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px">
+          <table style="width:100%;font-size:13px">
+            <tr><td><strong>每次股息</strong></td><td class="amt" id="resPerPayment">HK$ 0.00</td></tr>
+            <tr><td><strong>年股息總額 (稅前)</strong></td><td class="amt" id="resGross">HK$ 0.00</td></tr>
+            <tr><td><strong>年股息淨額 (稅後)</strong></td><td class="amt" id="resNet">HK$ 0.00</td></tr>
+            <tr><td><strong>稅金</strong></td><td class="amt" id="resTax">HK$ 0.00</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">🔄 複利計算 (DRIP)</div>
+        <div class="form-grid">
+          <div class="form-group"><label>初始持股數</label><input type="number" id="divShares2" step="0.0001" min="0"></div>
+          <div class="form-group"><label>每股股息 (HKD)</label><input type="number" id="divPerShare2" step="0.0001" min="0"></div>
+          <div class="form-group"><label>派息頻率</label><select id="divFrequency2"><option value="1">每年 1 次</option><option value="2">每年 2 次</option><option value="4">每年 4 次</option><option value="12">每月 1 次</option></select></div>
+          <div class="form-group"><label>稅率 (%)</label><input type="number" id="divTaxRate2" step="0.1" min="0" max="100" value="0"></div>
+          <div class="form-group"><label>年數</label><input type="number" id="compYears" step="1" min="0" value="10"></div>
+          <div class="form-group"><label>目前股價 (HKD)</label><input type="number" id="compPrice" step="0.0001" min="0"></div>
+          <div class="form-group"><label>股息再投資</label><select id="compReinvest"><option value="1">是 (DRIP)</option><option value="0">否 (現金)</option></select></div>
+          <div class="form-group"><button class="btn btn-primary" onclick="calculateCompoundDividend()">計算複利</button> <button class="btn btn-outline" onclick="clearCompoundDividend()">清除</button></div>
+        </div>
+        <div id="compoundResult" style="display:none;margin-top:16px;padding:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px">
+          <table style="width:100%;font-size:13px">
+            <tr><td><strong>最終持股數</strong></td><td class="amt" id="resCompFinalShares">-</td></tr>
+            <tr><td><strong>股息總額 (稅前)</strong></td><td class="amt" id="resCompGross">HK$ 0.00</td></tr>
+            <tr><td><strong>股息淨額 (稅後)</strong></td><td class="amt" id="resCompNet">HK$ 0.00</td></tr>
+            <tr><td><strong>最終股票總值</strong></td><td class="amt" id="resCompFinalValue">HK$ 0.00</td></tr>
+            <tr><td><strong>總回報率（股價＋股息，唔係淨股價）</strong></td><td class="amt" id="resCompROI">0%</td></tr>
+            <tr><td><strong>年化報酬率 (CAGR)</strong></td><td class="amt" id="resCompCAGR">0%</td></tr>
+          </table>
+          <h5>📅 每年明細</h5>
+          <table style="width:100%;font-size:12px"><thead><tr><th>年份</th><th>年初持股</th><th>年末持股</th><th>新增股數</th><th>股息總額(稅前)</th><th>稅金</th><th>股息淨額</th></tr></thead><tbody id="compoundYearlyBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">投資合伙戶口管理系統 v3.2.0 · 獨立站（Node.js + Express + SQLite）· 資料存喺伺服器 data/partnership.db，唔係瀏覽器 localStorage</div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
