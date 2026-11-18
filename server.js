@@ -615,14 +615,34 @@ app.post("/api/backup/restore", (req, res) => {
     if (insertTx(tx)) { added++; seen.add(txKey(tx)); }
   }
   if (b.settings) { if (b.settings.monthlyDeposit) setSetting("monthlyDeposit", b.settings.monthlyDeposit); if (b.settings.startDate) setSetting("startDate", b.settings.startDate); }
-  // 還原手動設定（股息、52 週、一手股數）同趨勢：只更新已存在嘅股票，唔會無端端加新股
+  // 還原合夥人（upsert：改過名或者加過嘅合夥人都還原得返）
+  let partnersAdded = 0, partnersUpdated = 0;
+  if (Array.isArray(b.partners)) {
+    for (const p of b.partners) {
+      if (!p.key) continue;
+      const key = String(p.key).toUpperCase();
+      const row = db.prepare("SELECT key FROM partners WHERE key = ?").get(key);
+      if (row) { db.prepare("UPDATE partners SET name = ?, sort = ? WHERE key = ?").run(p.name || "", p.sort ?? 0, key); partnersUpdated++; }
+      else { db.prepare("INSERT INTO partners(key, name, sort) VALUES(?, ?, ?)").run(key, p.name || "", p.sort ?? 0); partnersAdded++; }
+    }
+  }
+  // 還原監察股票（upsert：備份有、數據庫無嘅股就 INSERT 全行，唔會靜靜哋跳過；已有就 UPDATE 全部欄位）
+  let stocksAdded = 0, stocksUpdated = 0;
   if (Array.isArray(b.stocks)) {
     for (const s of b.stocks) {
       if (!s.code) continue;
-      const row = db.prepare("SELECT code FROM stocks WHERE code = ?").get(String(s.code).toUpperCase());
-      if (!row) continue;
-      db.prepare("UPDATE stocks SET dps = ?, high52 = ?, low52 = ?, manual52 = ?, lot_size = ?, lot_size_manual = ? WHERE code = ?")
-        .run(s.dps ?? null, s.high52 || 0, s.low52 || 0, s.manual52 ? 1 : 0, s.lot_size || null, s.lot_size_manual ? 1 : 0, String(s.code).toUpperCase());
+      const code = String(s.code).toUpperCase();
+      const lot = s.lot_size ?? defaultLotSize(code);
+      const row = db.prepare("SELECT code FROM stocks WHERE code = ?").get(code);
+      if (row) {
+        db.prepare("UPDATE stocks SET price = ?, prev_close = ?, change_pct = ?, updated_at = ?, dps = ?, high52 = ?, low52 = ?, quote_dps = ?, quote_yield = ?, week52_date = ?, manual52 = ?, lot_size = ?, lot_size_manual = ? WHERE code = ?")
+          .run(s.price || 0, s.prev_close || 0, s.change_pct || 0, s.updated_at || "", s.dps ?? null, s.high52 || 0, s.low52 || 0, s.quote_dps || 0, s.quote_yield || 0, s.week52_date || "", s.manual52 ? 1 : 0, lot, s.lot_size_manual ? 1 : 0, code);
+        stocksUpdated++;
+      } else {
+        db.prepare("INSERT INTO stocks(code, price, prev_close, change_pct, updated_at, dps, high52, low52, quote_dps, quote_yield, week52_date, manual52, lot_size, lot_size_manual) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .run(code, s.price || 0, s.prev_close || 0, s.change_pct || 0, s.updated_at || "", s.dps ?? null, s.high52 || 0, s.low52 || 0, s.quote_dps || 0, s.quote_yield || 0, s.week52_date || "", s.manual52 ? 1 : 0, lot, s.lot_size_manual ? 1 : 0);
+        stocksAdded++;
+      }
     }
   }
   if (Array.isArray(b.trends)) {
@@ -633,7 +653,7 @@ app.post("/api/backup/restore", (req, res) => {
         .run(String(t.code).toUpperCase(), t.date || "", t.ma20 || 0, t.ma50 || 0, t.trend || "", t.ok ? 1 : 0, t.updated_at || "");
     }
   }
-  res.json({ ok: true, imported: added, duplicates });
+  res.json({ ok: true, imported: added, duplicates, stocksAdded, stocksUpdated, partnersAdded, partnersUpdated });
 });
 app.post("/api/prices", (req, res) => {
   const prices = req.body.prices || req.body;

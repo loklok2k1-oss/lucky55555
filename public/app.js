@@ -261,7 +261,7 @@ async function exportJSON() {
 async function exportCSV() { const res = await fetch("/api/export/csv", { headers: { "X-Admin-Password": PW } }); const blob = await res.blob(); download(URL.createObjectURL(blob), "partnership-export-" + new Date().toISOString().slice(0, 10) + ".csv"); }
 $("jsonFile").addEventListener("change", async (e) => {
   const f = e.target.files[0]; if (!f) return;
-  try { const data = JSON.parse(await f.text()); const r = await api("/api/backup/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); showAlert(`JSON 已還原：新增 ${r.imported} 筆，重複 ${r.duplicates} 筆`); await refresh(); }
+  try { const data = JSON.parse(await f.text()); const r = await api("/api/backup/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }); const sA = r.stocksAdded ?? 0, sU = r.stocksUpdated ?? 0; showAlert(`JSON 已還原：交易新增 ${r.imported} 筆，重複 ${r.duplicates} 筆；監察股票還原 ${sA + sU} 隻（新增 ${sA} 隻、更新 ${sU} 隻）`); await refresh(); }
   catch (err) { showAlert("JSON 還原失敗：" + err.message, "error"); }
   e.target.value = "";
 });

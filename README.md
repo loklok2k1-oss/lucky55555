@@ -1,10 +1,21 @@
-# 投資合伙戶口管理系統 v3.2.2
+# 投資合伙戶口管理系統 v3.2.3
 
 獨立站（Node.js + Express + SQLite），由單檔 v2.26 升級而成，修好晒 v2.26 嘅計數 bug，資料由瀏覽器 localStorage 改做伺服器資料庫 `data/partnership.db`，幾個人用同一部伺服器就見到同一份數。
 
 ## 版本
 
-**v3.2.2**（2026-11-18）
+**v3.2.3**（2026-11-18）
+
+## Railway 部署（必做：加 Volume 保住數據庫）
+
+資料庫 `data/partnership.db` 喺 container 入面（Railway 係 `/app/data/partnership.db`）。如果唔掛 persistent volume，每次重新部署都會清走成個數據庫，變返全新空數據庫（得預設合夥人 A–E 同 00003.HK 一行；`seed.csv` 唔喺 GitHub，連交易都要靠匯入 JSON 備份先返嚟）。
+
+**加 Volume 步驟（做一次就得）：**
+1. Railway 項目 → 呢個 service → Settings → Volumes → Add Volume
+2. Mount path 填 `/app/data`
+3. 儲存之後重新部署一次
+
+**加完 Volume 之後先部署新版，部署完再匯入 JSON 備份**（順序唔可以調轉，否則匯入咗嘅數據都會畀下一次部署清走）。平時改動之前，都先喺網站按「匯出 JSON 備份」留底。
 
 ## 快速開始（本地）
 
