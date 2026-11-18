@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>投資合伙戶口管理系統 v3.2.3</title>
+<title>投資合伙戶口管理系統 v3.2.4</title>
 <style>
 * { box-sizing: border-box; font-family: 'Microsoft JhengHei', 'PingFang TC', 'Heiti TC', sans-serif; }
 body { margin: 0; padding: 16px; background: #f3f4f6; color: #1f2937; line-height: 1.5; overflow-x: hidden; }
@@ -70,7 +70,7 @@ button.btn-sm { padding: 6px 10px; font-size: 12px; }
 <div class="container">
   <div id="loginBox">
     <h1>投資合伙戶口管理系統</h1>
-    <div class="version">v3.2.3 — 獨立站（Node.js + SQLite）</div>
+    <div class="version">v3.2.4 — 獨立站（Node.js + SQLite）</div>
     <p style="font-size:13px;color:#6b7280">請輸入管理密碼先可以睇到合夥戶口資料。預設密碼係 <code>partnership-2026</code>，請喺 <code>config.json</code> 即刻改咗佢。</p>
     <div class="form-group"><label>管理密碼</label><input type="password" id="loginPw" placeholder="管理密碼"></div>
     <div style="margin-top:12px"><button class="btn btn-primary" onclick="doLogin()">登入</button></div>
@@ -79,7 +79,7 @@ button.btn-sm { padding: 6px 10px; font-size: 12px; }
 
   <div id="app" style="display:none">
     <h1>投資合伙戶口管理系統</h1>
-    <div class="version">v3.2.3 — 獨立站（Node.js + Express + SQLite）</div>
+    <div class="version">v3.2.4 — 獨立站（Node.js + Express + SQLite）</div>
     <div class="subtitle">高息定投合夥戶口 · 00003.HK 煤氣 · 合夥人 A 樂、B 暉、C 源、D 啤、E 英 · 每月應存 HK$500 · 起始 2018-03-01</div>
     <div style="text-align:right;margin-bottom:12px"><button class="btn btn-outline btn-sm" onclick="logout()">登出</button></div>
     <div id="alert" class="alert"></div>
@@ -175,6 +175,7 @@ button.btn-sm { padding: 6px 10px; font-size: 12px; }
         <div id="monitorCards"></div>
         <div class="controls" style="margin-top:12px">
           <input type="text" id="watchCode" placeholder="加監察股票，例如 0700.HK" style="padding:7px 9px;border:1px solid #d1d5db;border-radius:5px;font-size:13px">
+          <input type="text" id="watchName" placeholder="名稱（選填，唔填就用代號／對照表）" style="padding:7px 9px;border:1px solid #d1d5db;border-radius:5px;font-size:13px">
           <button class="btn btn-primary" onclick="addWatchStock()">加入監察</button>
         </div>
       </div>
@@ -290,7 +291,7 @@ button.btn-sm { padding: 6px 10px; font-size: 12px; }
       </div>
     </div>
 
-    <div class="footer">投資合伙戶口管理系統 v3.2.3 · 獨立站（Node.js + Express + SQLite）· 資料存喺伺服器 data/partnership.db，唔係瀏覽器 localStorage</div>
+    <div class="footer">投資合伙戶口管理系統 v3.2.4 · 獨立站（Node.js + Express + SQLite）· 資料存喺伺服器 data/partnership.db，唔係瀏覽器 localStorage</div>
   </div>
 </div>
 <script src="app.js"></script>
