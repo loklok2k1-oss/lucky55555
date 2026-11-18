@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS partners (
   key TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', sort INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS stocks (
-  code TEXT PRIMARY KEY, price REAL NOT NULL DEFAULT 0,
+  code TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', price REAL NOT NULL DEFAULT 0,
   prev_close REAL NOT NULL DEFAULT 0, change_pct REAL NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL DEFAULT '',
   dps REAL, high52 REAL NOT NULL DEFAULT 0, low52 REAL NOT NULL DEFAULT 0,
@@ -67,7 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_tx_partner ON transactions(partner);
 CREATE INDEX IF NOT EXISTS idx_tx_code ON transactions(code);
 `);
 // 舊資料庫升級：補返 stocks 表新欄位
-for (const col of ["prev_close REAL NOT NULL DEFAULT 0", "change_pct REAL NOT NULL DEFAULT 0", "updated_at TEXT NOT NULL DEFAULT ''", "dps REAL", "high52 REAL NOT NULL DEFAULT 0", "low52 REAL NOT NULL DEFAULT 0", "quote_dps REAL NOT NULL DEFAULT 0", "quote_yield REAL NOT NULL DEFAULT 0", "week52_date TEXT NOT NULL DEFAULT ''", "manual52 INTEGER NOT NULL DEFAULT 0", "lot_size INTEGER", "lot_size_manual INTEGER NOT NULL DEFAULT 0"]) {
+for (const col of ["name TEXT NOT NULL DEFAULT ''", "prev_close REAL NOT NULL DEFAULT 0", "change_pct REAL NOT NULL DEFAULT 0", "updated_at TEXT NOT NULL DEFAULT ''", "dps REAL", "high52 REAL NOT NULL DEFAULT 0", "low52 REAL NOT NULL DEFAULT 0", "quote_dps REAL NOT NULL DEFAULT 0", "quote_yield REAL NOT NULL DEFAULT 0", "week52_date TEXT NOT NULL DEFAULT ''", "manual52 INTEGER NOT NULL DEFAULT 0", "lot_size INTEGER", "lot_size_manual INTEGER NOT NULL DEFAULT 0"]) {
   try { db.exec(`ALTER TABLE stocks ADD COLUMN ${col}`); } catch (e) { /* 已經有就唔理 */ }
 }
 
@@ -81,6 +81,18 @@ function defaultLotSize(code) {
 function effectiveLotSize(row) {
   if (row && row.lot_size > 0) return row.lot_size;
   return defaultLotSize(row ? row.code : "");
+}
+// 股票中文名對照表（canonicalCode 歸一化之後查，00003.HK／003.HK／3.HK 都係同一隻）
+const STOCK_NAME_MAP = { "00003.HK": "煤氣", "00883.HK": "中海油", "01579.HK": "頤海國際", "02510.HK": "德翔海運", "06181.HK": "老鋪黃金", "01398.HK": "工商銀行" };
+function stockNameFromMap(code) {
+  const canon = canonicalCode(code);
+  for (const [k, v] of Object.entries(STOCK_NAME_MAP)) if (canonicalCode(k) === canon) return v;
+  return "";
+}
+// 有效名：手動名 → 對照表 → 空字串（無名就淨係顯示代號）
+function effectiveStockName(row) {
+  if (row && row.name && String(row.name).trim()) return String(row.name).trim();
+  return stockNameFromMap(row ? row.code : "");
 }
 
 function getSetting(key, fallback) {
@@ -161,7 +173,7 @@ function computeState() {
     const avgCost = bought[code] ? buyCostFor(code, txs) / bought[code] : 0;
     const price = prices[code] || 0;
     const stock = stocks.find((s) => s.code === code) || {};
-    return { code, shares, avgCost, price, value: shares * price, unrealised: shares * price - shares * avgCost, prevClose: stock.prev_close || 0, changePct: stock.change_pct || 0, updatedAt: stock.updated_at || "" };
+    return { code, name: effectiveStockName(stock), shares, avgCost, price, value: shares * price, unrealised: shares * price - shares * avgCost, prevClose: stock.prev_close || 0, changePct: stock.change_pct || 0, updatedAt: stock.updated_at || "" };
   });
   function buyCostFor(code, all) {
     return all.filter((t) => t.code === code && t.action === "BUY").reduce((s, t) => s + t.price * t.qty, 0);
@@ -230,7 +242,7 @@ function computeState() {
     const trendRow = trends.find((t) => t.code === s.code);
     const trend = trendRow && trendRow.ok ? trendRow.trend : "";
     const trendLabel = trend === "up" ? "上升軌" : trend === "down" ? "下降軌" : trend === "sideways" ? "橫行／整固" : "";
-    return { code: s.code, price, prevClose: s.prev_close || 0, changePct: s.change_pct || 0, updatedAt: s.updated_at || "", held, dps, dpsSource, yieldPct, high52, low52, manual52: s.manual52 ? 1 : 0, positionPct, positionLabel, signal, signalLabel, signalText, lotSize, lotSizeManual: s.lot_size_manual ? 1 : 0, lotValue: price * lotSize, trend, trendLabel, ma20: trendRow ? trendRow.ma20 || 0 : 0, ma50: trendRow ? trendRow.ma50 || 0 : 0, trendDate: trendRow ? trendRow.date || "" : "" };
+    return { code: s.code, name: effectiveStockName(s), price, prevClose: s.prev_close || 0, changePct: s.change_pct || 0, updatedAt: s.updated_at || "", held, dps, dpsSource, yieldPct, high52, low52, manual52: s.manual52 ? 1 : 0, positionPct, positionLabel, signal, signalLabel, signalText, lotSize, lotSizeManual: s.lot_size_manual ? 1 : 0, lotValue: price * lotSize, trend, trendLabel, ma20: trendRow ? trendRow.ma20 || 0 : 0, ma50: trendRow ? trendRow.ma50 || 0 : 0, trendDate: trendRow ? trendRow.date || "" : "" };
   });
   return {
     cash, principal, totalAssets, totalProfit, totalDividend, totalInterest,
@@ -635,12 +647,12 @@ app.post("/api/backup/restore", (req, res) => {
       const lot = s.lot_size ?? defaultLotSize(code);
       const row = db.prepare("SELECT code FROM stocks WHERE code = ?").get(code);
       if (row) {
-        db.prepare("UPDATE stocks SET price = ?, prev_close = ?, change_pct = ?, updated_at = ?, dps = ?, high52 = ?, low52 = ?, quote_dps = ?, quote_yield = ?, week52_date = ?, manual52 = ?, lot_size = ?, lot_size_manual = ? WHERE code = ?")
-          .run(s.price || 0, s.prev_close || 0, s.change_pct || 0, s.updated_at || "", s.dps ?? null, s.high52 || 0, s.low52 || 0, s.quote_dps || 0, s.quote_yield || 0, s.week52_date || "", s.manual52 ? 1 : 0, lot, s.lot_size_manual ? 1 : 0, code);
+        db.prepare("UPDATE stocks SET name = ?, price = ?, prev_close = ?, change_pct = ?, updated_at = ?, dps = ?, high52 = ?, low52 = ?, quote_dps = ?, quote_yield = ?, week52_date = ?, manual52 = ?, lot_size = ?, lot_size_manual = ? WHERE code = ?")
+          .run(s.name || "", s.price || 0, s.prev_close || 0, s.change_pct || 0, s.updated_at || "", s.dps ?? null, s.high52 || 0, s.low52 || 0, s.quote_dps || 0, s.quote_yield || 0, s.week52_date || "", s.manual52 ? 1 : 0, lot, s.lot_size_manual ? 1 : 0, code);
         stocksUpdated++;
       } else {
-        db.prepare("INSERT INTO stocks(code, price, prev_close, change_pct, updated_at, dps, high52, low52, quote_dps, quote_yield, week52_date, manual52, lot_size, lot_size_manual) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .run(code, s.price || 0, s.prev_close || 0, s.change_pct || 0, s.updated_at || "", s.dps ?? null, s.high52 || 0, s.low52 || 0, s.quote_dps || 0, s.quote_yield || 0, s.week52_date || "", s.manual52 ? 1 : 0, lot, s.lot_size_manual ? 1 : 0);
+        db.prepare("INSERT INTO stocks(code, name, price, prev_close, change_pct, updated_at, dps, high52, low52, quote_dps, quote_yield, week52_date, manual52, lot_size, lot_size_manual) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .run(code, s.name || "", s.price || 0, s.prev_close || 0, s.change_pct || 0, s.updated_at || "", s.dps ?? null, s.high52 || 0, s.low52 || 0, s.quote_dps || 0, s.quote_yield || 0, s.week52_date || "", s.manual52 ? 1 : 0, lot, s.lot_size_manual ? 1 : 0);
         stocksAdded++;
       }
     }
@@ -703,7 +715,8 @@ app.post("/api/stocks", (req, res) => {
   const canon = canonicalCode(code);
   const dup = db.prepare("SELECT code FROM stocks").all().find((s) => canonicalCode(s.code) === canon);
   if (dup) return res.status(400).json({ error: `已經有呢隻股票（${dup.code}），${code} 同佢係同一隻，唔使再加` });
-  db.prepare("INSERT OR IGNORE INTO stocks(code, price, lot_size) VALUES(?, 0, ?)").run(code, defaultLotSize(code));
+  const name = (req.body.name || "").trim();
+  db.prepare("INSERT OR IGNORE INTO stocks(code, price, lot_size, name) VALUES(?, 0, ?, ?)").run(code, defaultLotSize(code), name);
   res.json({ ok: true });
 });
 // 股票代號歸一化：去前導零（00003.HK、003.HK、3.HK 都係同一隻 3.HK），用嚟判斷重複
@@ -716,6 +729,8 @@ app.put("/api/stocks/:code", (req, res) => {
   // 手動設定每股股息（dps，傳 null 清除）、52 週高低同每手股數（lotSize，傳 null 或 0 回復預設）
   const code = req.params.code.toUpperCase();
   const b = req.body || {};
+  // 手動中文名：傳空字串或者 null 就清除（回復對照表預設）
+  if (b.name !== undefined) db.prepare("UPDATE stocks SET name = ? WHERE code = ?").run(b.name === null ? "" : String(b.name).trim(), code);
   if (b.dps !== undefined) db.prepare("UPDATE stocks SET dps = ? WHERE code = ?").run(b.dps === null ? null : parseFloat(b.dps) || 0, code);
   if (b.lotSize !== undefined) {
     if (b.lotSize === null || Number(b.lotSize) === 0) {

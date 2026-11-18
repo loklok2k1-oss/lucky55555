@@ -1,0 +1,10 @@
+node_modules/
+data/*.db
+data/*.db-journal
+data/*.sqlite
+data/*.sqlite-journal
+data/*.csv
+.env
+*.log
+# 注意：data/seed.csv 入面係真實合夥人存款數字，唔好推上 GitHub。
+# 首次部署去伺服器嗰陣，用 WinSCP 單獨上傳 seed.csv，或者喺網頁匯入你原本嗰個 CSV。
