@@ -1,10 +1,23 @@
-// 投資合伙戶口管理系統 v3.2.0 — 前端
+// 投資合伙戶口管理系統 v3.2.2 — 前端
 // 所有數字由伺服器 /api/state 計好返嚟，呢度只負責顯示，唔再喺瀏覽器計本金盈虧。
 "use strict";
 let PW = sessionStorage.getItem("pw") || "";
 let state = null, txs = [], editingTxId = null;
 const selectedTxIds = new Set();
 const $ = (id) => document.getElementById(id);
+// 公式一鍵隱藏：預設收起（localStorage 記住選擇，下次開返都係同一個狀態）
+let showFormula = localStorage.getItem("partnership-show-formula") === "1";
+function applyFormulaVisibility() {
+  const tab = $("tab-monitor");
+  if (tab) tab.classList.toggle("hide-formula", !showFormula);
+  const btn = $("formulaToggleBtn");
+  if (btn) btn.textContent = showFormula ? "隱藏公式" : "顯示公式";
+}
+function toggleFormula() {
+  showFormula = !showFormula;
+  localStorage.setItem("partnership-show-formula", showFormula ? "1" : "0");
+  applyFormulaVisibility();
+}
 
 async function api(path, opts = {}) {
   const res = await fetch(path, { ...opts, headers: { "X-Admin-Password": PW, ...(opts.headers || {}) } });
@@ -53,7 +66,15 @@ async function refresh() {
     `<tr><td><strong>${h.code}</strong></td><td class="amt">${h.shares.toLocaleString()}</td><td class="amt">HK$ ${h.avgCost.toFixed(4)}</td><td class="amt">HK$ ${h.price.toFixed(2)}</td><td class="amt ${h.changePct >= 0 ? "pos" : "neg"}">${h.changePct >= 0 ? "+" : ""}${h.changePct.toFixed(2)}%</td><td class="amt">${fmtMoney(h.value)}</td><td class="amt ${h.unrealised >= 0 ? "pos" : "neg"}">${fmtMoney(h.unrealised)}</td></tr>`).join("")
     : `<tr><td colspan="7">暫時冇持股（請先匯入 CSV 或新增 BUY 交易）</td></tr>`;
   const latest = state.stocks.map((s) => s.updated_at).filter(Boolean).sort().pop();
-  $("priceUpdatedAt").textContent = latest ? "上次更新：" + new Date(latest).toLocaleString("zh-HK", { hour12: false }) : "未更新過";
+  const updTxt = latest ? "上次更新：" + new Date(latest).toLocaleString("zh-HK", { hour12: false }) : "未更新過";
+  document.querySelectorAll(".price-updated-at").forEach((el) => { el.textContent = updTxt; });
+  // 購買股票結餘 = 現金結餘 − 合夥人差額總和（由實時數據計，唔寫死），連算式同每人分項一齊顯示
+  const bb = state.buyBalance;
+  $("buyBalanceBox").innerHTML = bb
+    ? `<div style="font-size:15px"><strong>購買股票結餘：${fmtMoney(bb.balance)}</strong></div>
+      <div style="font-size:13px;color:#374151">現金結餘 ${fmtMoney(bb.cash)} − 合夥人差額總和 ${fmtMoney(bb.totalDiff)}</div>
+      <div style="font-size:12px;color:#6b7280">${bb.items.map((i) => `${i.name} ${i.diff >= 0 ? "+" : ""}${fmtMoney(i.diff)}`).join("　")}</div>`
+    : "";
   const sigColor = { buy: "#059669", hold: "#2563eb", reduce: "#dc2626", watch: "#6b7280", none: "#6b7280" };
   $("monitorCards").innerHTML = (state.monitor || []).length ? state.monitor.map((m) => `
     <div class="card" style="text-align:left;margin-bottom:12px">
@@ -63,16 +84,30 @@ async function refresh() {
       </div>
       <div style="font-size:13px;margin-top:8px">現價 HK$ ${m.price.toFixed(2)}（${m.changePct >= 0 ? "+" : ""}${m.changePct.toFixed(2)}%）　上一收 HK$ ${m.prevClose.toFixed(2)}</div>
       <div style="font-size:13px">每股股息 ${m.dps !== null ? "HK$ " + m.dps.toFixed(4) + "（" + m.dpsSource + "）" : "—"}　息率 ${m.yieldPct !== null ? m.yieldPct.toFixed(2) + "%" : "—"}</div>
-      <div style="font-size:13px">52 週 ${m.high52 > 0 ? "HK$ " + m.low52.toFixed(2) + " – " + m.high52.toFixed(2) : "未有 52 週數據"}　位置 ${m.positionPct !== null ? m.positionPct.toFixed(1) + "%（" + m.positionLabel + "）" : "—"}</div>
+      <div style="font-size:13px">趨勢：<strong>${m.trendLabel || "未有趨勢數據"}</strong><span class="formula-detail">　MA20 ${m.ma20 ? m.ma20.toFixed(2) : "—"}　MA50 ${m.ma50 ? m.ma50.toFixed(2) : "—"}</span></div>
+      <div class="formula-detail" style="font-size:13px">每手 ${m.lotSize.toLocaleString()} 股，一手 ${fmtMoney(m.lotValue)}（現價 HK$ ${m.price.toFixed(2)} × ${m.lotSize.toLocaleString()} 股，唔計手續費）${m.lotSizeManual ? "（手動）" : ""}</div>
+      <div style="font-size:13px"><span class="formula-detail">52 週 ${m.high52 > 0 ? "HK$ " + m.low52.toFixed(2) + " – " + m.high52.toFixed(2) + (m.manual52 ? "（手動）" : "") : "未有 52 週數據"}　</span>位置 ${m.positionPct !== null ? m.positionPct.toFixed(1) + "%（" + m.positionLabel + "）" : "—"}</div>
       ${m.positionPct !== null ? `<div style="background:#e5e7eb;border-radius:4px;height:8px;margin:6px 0"><div style="background:${sigColor[m.signal]};width:${m.positionPct}%;height:8px;border-radius:4px"></div></div>` : ""}
       <div style="font-size:13px">${m.signalText}</div>
       <div style="font-size:12px;color:#6b7280">更新：${m.updatedAt ? new Date(m.updatedAt).toLocaleString("zh-HK", { hour12: false }) : "-"}</div>
+      <div class="controls" style="margin-top:8px">
+        <input type="number" id="lot-${m.code}" placeholder="手動每手股數" step="1" min="1" style="width:150px;padding:6px 8px;border:1px solid #d1d5db;border-radius:5px" value="${m.lotSizeManual ? m.lotSize : ""}">
+        <button class="btn btn-sm btn-outline" onclick="setLotSize('${m.code}')">設定每手股數</button>
+        <button class="btn btn-sm btn-outline" onclick="clearLotSize('${m.code}')">回復預設</button>
+      </div>
       <div class="controls" style="margin-top:8px">
         <input type="number" id="dps-${m.code}" placeholder="手動每股股息" step="0.0001" min="0" style="width:150px;padding:6px 8px;border:1px solid #d1d5db;border-radius:5px">
         <button class="btn btn-sm btn-outline" onclick="setDps('${m.code}')">設定股息</button>
         <button class="btn btn-sm btn-outline" onclick="clearDps('${m.code}')">清除手動股息</button>
       </div>
+      <div class="controls" style="margin-top:8px">
+        <input type="number" id="h52-${m.code}" placeholder="手動 52 週高" step="0.0001" min="0" style="width:120px;padding:6px 8px;border:1px solid #d1d5db;border-radius:5px" value="${m.manual52 && m.high52 > 0 ? m.high52 : ""}">
+        <input type="number" id="l52-${m.code}" placeholder="手動 52 週低" step="0.0001" min="0" style="width:120px;padding:6px 8px;border:1px solid #d1d5db;border-radius:5px" value="${m.manual52 && m.low52 > 0 ? m.low52 : ""}">
+        <button class="btn btn-sm btn-outline" onclick="setWeek52('${m.code}')">設定 52 週</button>
+        <button class="btn btn-sm btn-outline" onclick="clearWeek52('${m.code}')">清除 52 週</button>
+      </div>
     </div>`).join("") : "未有監察股票";
+  applyFormulaVisibility();
   $("stockCodesDisplay").textContent = state.stocks.map((s) => s.code).join(", ") || "-";
   $("setMonthly").value = state.settings.monthlyDeposit;
   $("setStart").value = state.settings.startDate;
@@ -94,6 +129,27 @@ async function setDps(code) {
 async function clearDps(code) {
   await api("/api/stocks/" + code, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dps: null }) });
   showAlert(code + " 手動股息已清除"); await refresh();
+}
+async function setLotSize(code) {
+  const v = parseInt(document.getElementById("lot-" + code).value, 10);
+  if (!Number.isFinite(v) || v <= 0) { showAlert("請輸入每手股數（正整數）", "error"); return; }
+  await api("/api/stocks/" + code, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lotSize: v }) });
+  showAlert(code + " 每手股數已設定為 " + v + " 股"); await refresh();
+}
+async function clearLotSize(code) {
+  await api("/api/stocks/" + code, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lotSize: null }) });
+  showAlert(code + " 每手股數已回復預設"); await refresh();
+}
+async function setWeek52(code) {
+  const h = parseFloat(document.getElementById("h52-" + code).value);
+  const l = parseFloat(document.getElementById("l52-" + code).value);
+  if (!Number.isFinite(h) || !Number.isFinite(l) || h <= l || l <= 0) { showAlert("請輸入 52 週高同低，高要大過低", "error"); return; }
+  await api("/api/stocks/" + code, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ high52: h, low52: l }) });
+  showAlert(code + " 52 週已設定為 HK$ " + l.toFixed(2) + " – " + h.toFixed(2) + "（手動，自動更新唔會覆蓋）"); await refresh();
+}
+async function clearWeek52(code) {
+  await api("/api/stocks/" + code, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ high52: 0, low52: 0 }) });
+  showAlert(code + " 手動 52 週已清除，恢復自動更新"); await refresh();
 }
 async function loadTx() {
   const q = new URLSearchParams({ limit: 500 });
@@ -146,15 +202,19 @@ async function refreshPrices() {
   try {
     const r = await api("/api/prices/refresh", { method: "POST" });
     const failed = r.results.filter((x) => !x.ok).map((x) => x.code).join("、");
-    showAlert(`股價已更新：${r.updated}/${r.total} 隻成功` + (failed ? `；失敗：${failed}` : ""));
+    const msg = `股價已更新：${r.updated}/${r.total} 隻成功；52 週數據：${r.week52Ok}/${r.total} 隻成功` + (r.week52Missing && r.week52Missing.length ? `；失敗：${r.week52Missing.join("、")}` : "") + (failed ? `；股價失敗：${failed}` : "") + (r.trendTotal ? `；趨勢：${r.trendOk}/${r.trendTotal} 隻有數據` : "");
+    showAlert(msg);
+    document.querySelectorAll(".refresh-result").forEach((el) => { el.textContent = msg; });
     await refresh();
   } catch (e) { showAlert("更新股價失敗：" + e.message, "error"); }
 }
 async function addWatchStock() {
   const code = $("watchCode").value.trim().toUpperCase(); if (!code) return;
-  await api("/api/stocks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
-  $("watchCode").value = "";
-  await refreshPrices();
+  try {
+    await api("/api/stocks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+    $("watchCode").value = "";
+    await refreshPrices();
+  } catch (e) { showAlert(e.message, "error"); }
 }
 async function bulkUpdatePrices() {
   const input = $("quickPriceInput").value.trim();
@@ -178,8 +238,10 @@ async function renamePartner(key) {
 async function removePartner(key) { if (!confirm("確定刪除合夥人 " + key + " 嗎？佢嘅交易唔會一齊刪走。")) return; await api("/api/partners/" + key, { method: "DELETE" }); showAlert("合夥人已刪除"); await refresh(); }
 async function addStock() {
   const code = $("newStockCode").value.trim().toUpperCase(); if (!code) { showAlert("請輸入股票代號", "error"); return; }
-  await api("/api/stocks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
-  $("newStockCode").value = ""; showAlert("股票已新增"); await refresh();
+  try {
+    await api("/api/stocks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+    $("newStockCode").value = ""; showAlert("股票已新增"); await refresh();
+  } catch (e) { showAlert(e.message, "error"); }
 }
 async function removeStock(code) { await api("/api/stocks/" + code, { method: "DELETE" }); showAlert("股票已刪除"); await refresh(); }
 async function saveSettings() {

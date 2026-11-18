@@ -1,4 +1,4 @@
-// 投資合伙戶口管理系統 — 獨立站 v3.2.0
+// 投資合伙戶口管理系統 — 獨立站 v3.2.2
 // Node.js + Express + SQLite（內置 node:sqlite，唔使裝原生模組）
 // 啟動：npm install 之後 npm start，預設 http://localhost:3004
 // 首次啟動如果資料庫係空，會自動匯入 data/seed.csv（198 筆，由你 2026-11-02 嗰個 CSV 轉做 UTF-8）。
@@ -49,7 +49,15 @@ CREATE TABLE IF NOT EXISTS stocks (
   prev_close REAL NOT NULL DEFAULT 0, change_pct REAL NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL DEFAULT '',
   dps REAL, high52 REAL NOT NULL DEFAULT 0, low52 REAL NOT NULL DEFAULT 0,
-  quote_dps REAL NOT NULL DEFAULT 0, quote_yield REAL NOT NULL DEFAULT 0
+  quote_dps REAL NOT NULL DEFAULT 0, quote_yield REAL NOT NULL DEFAULT 0,
+  week52_date TEXT NOT NULL DEFAULT '', manual52 INTEGER NOT NULL DEFAULT 0,
+  lot_size INTEGER, lot_size_manual INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS trends (
+  code TEXT PRIMARY KEY, date TEXT NOT NULL DEFAULT '',
+  ma20 REAL NOT NULL DEFAULT 0, ma50 REAL NOT NULL DEFAULT 0,
+  trend TEXT NOT NULL DEFAULT '', ok INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT ''
@@ -59,8 +67,20 @@ CREATE INDEX IF NOT EXISTS idx_tx_partner ON transactions(partner);
 CREATE INDEX IF NOT EXISTS idx_tx_code ON transactions(code);
 `);
 // 舊資料庫升級：補返 stocks 表新欄位
-for (const col of ["prev_close REAL NOT NULL DEFAULT 0", "change_pct REAL NOT NULL DEFAULT 0", "updated_at TEXT NOT NULL DEFAULT ''", "dps REAL", "high52 REAL NOT NULL DEFAULT 0", "low52 REAL NOT NULL DEFAULT 0", "quote_dps REAL NOT NULL DEFAULT 0", "quote_yield REAL NOT NULL DEFAULT 0"]) {
+for (const col of ["prev_close REAL NOT NULL DEFAULT 0", "change_pct REAL NOT NULL DEFAULT 0", "updated_at TEXT NOT NULL DEFAULT ''", "dps REAL", "high52 REAL NOT NULL DEFAULT 0", "low52 REAL NOT NULL DEFAULT 0", "quote_dps REAL NOT NULL DEFAULT 0", "quote_yield REAL NOT NULL DEFAULT 0", "week52_date TEXT NOT NULL DEFAULT ''", "manual52 INTEGER NOT NULL DEFAULT 0", "lot_size INTEGER", "lot_size_manual INTEGER NOT NULL DEFAULT 0"]) {
   try { db.exec(`ALTER TABLE stocks ADD COLUMN ${col}`); } catch (e) { /* 已經有就唔理 */ }
+}
+
+// 每手股數預設值（已核實：煤氣／中海油／頤海／德翔 1,000 股、老鋪黃金 100 股；新股預設 1,000 股）
+const DEFAULT_LOT_SIZE = { "00003.HK": 1000, "00883.HK": 1000, "01579.HK": 1000, "02510.HK": 1000, "06181.HK": 100 };
+function defaultLotSize(code) {
+  const canon = canonicalCode(code);
+  for (const [k, v] of Object.entries(DEFAULT_LOT_SIZE)) if (canonicalCode(k) === canon) return v;
+  return 1000;
+}
+function effectiveLotSize(row) {
+  if (row && row.lot_size > 0) return row.lot_size;
+  return defaultLotSize(row ? row.code : "");
 }
 
 function getSetting(key, fallback) {
@@ -79,7 +99,7 @@ const DEFAULT_PARTNERS = [["A", "樂", 1], ["B", "暉", 2], ["C", "源", 3], ["D
 for (const [k, name, sort] of DEFAULT_PARTNERS) {
   db.prepare("INSERT OR IGNORE INTO partners(key, name, sort) VALUES(?, ?, ?)").run(k, name, sort);
 }
-db.prepare("INSERT OR IGNORE INTO stocks(code, price) VALUES('00003.HK', 0)").run();
+db.prepare("INSERT OR IGNORE INTO stocks(code, price, lot_size) VALUES('00003.HK', 0, 1000)").run();
 
 function makeId() { return "tx_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 9); }
 function txKey(t) { return [t.date, t.code, t.action, t.price, t.qty, t.fee, t.partner, t.note].join("|"); }
@@ -116,6 +136,7 @@ function computeState() {
   const txs = db.prepare("SELECT * FROM transactions ORDER BY date ASC, created_at ASC").all();
   const partners = db.prepare("SELECT * FROM partners ORDER BY sort ASC").all();
   const stocks = db.prepare("SELECT * FROM stocks").all();
+  const trends = db.prepare("SELECT * FROM trends").all();
   const prices = Object.fromEntries(stocks.map((s) => [s.code, s.price || 0]));
   const monthlyDeposit = parseFloat(getSetting("monthlyDeposit", "500")) || 0;
   const startDate = getSetting("startDate", "2018-03-01") || "2018-03-01";
@@ -161,6 +182,10 @@ function computeState() {
     const sharePct = principal > 0 ? (actual / principal) * 100 : 0;
     return { key: p.key, name: p.name || p.key, expected: expectedPerPartner, actual, diff: actual - expectedPerPartner, sharePct, pnlShare: (totalProfit * sharePct) / 100 };
   });
+  // 購買股票結餘 = 現金結餘 − 合夥人差額總和（每人差額 = 實際存入 − 應存；多存總和現時係 HK$3,762.90，
+  // 所以 50,903.89 − 3,762.90 = 47,140.99）。由實時數據計，唔寫死；有人未存夠（差額負數）總和照實計。
+  const totalDiff = partnerRows.reduce((s, p) => s + p.diff, 0);
+  const buyBalance = { cash, totalDiff, balance: cash - totalDiff, items: partnerRows.map((p) => ({ key: p.key, name: p.name, diff: p.diff })) };
   // ---------- 監察（高息股資料為主） ----------
   // 買賣建議公式（同 Muse 版 v3.2.0 一致，只供參考，唔係投資建議）：
   // 52 週位置 = (現價 − 52 週低) ÷ (52 週高 − 52 週低) × 100%，夾在 0–100%
@@ -199,12 +224,18 @@ function computeState() {
     } else if (yieldPct !== null && yieldPct < 3 && positionPct !== null && positionPct >= 70) {
       signal = "watch"; signalLabel = "觀望"; signalText = "息率偏低又近高位：繼續觀望";
     } else if (held) { signal = "hold"; signalLabel = "持有"; signalText = "未有明顯訊號：繼續持有收息"; }
-    return { code: s.code, price, prevClose: s.prev_close || 0, changePct: s.change_pct || 0, updatedAt: s.updated_at || "", held, dps, dpsSource, yieldPct, high52, low52, positionPct, positionLabel, signal, signalLabel, signalText };
+    // 一手：現價 × 每手股數（唔計手續費）。趨勢：由 trends 表攞上次成功計算嘅結果（每日最多成功一次），
+    // 唔係即時現價計出嚟——公式用 Yahoo 半年日線收市價，見 fetchTrend()。
+    const lotSize = effectiveLotSize(s);
+    const trendRow = trends.find((t) => t.code === s.code);
+    const trend = trendRow && trendRow.ok ? trendRow.trend : "";
+    const trendLabel = trend === "up" ? "上升軌" : trend === "down" ? "下降軌" : trend === "sideways" ? "橫行／整固" : "";
+    return { code: s.code, price, prevClose: s.prev_close || 0, changePct: s.change_pct || 0, updatedAt: s.updated_at || "", held, dps, dpsSource, yieldPct, high52, low52, manual52: s.manual52 ? 1 : 0, positionPct, positionLabel, signal, signalLabel, signalText, lotSize, lotSizeManual: s.lot_size_manual ? 1 : 0, lotValue: price * lotSize, trend, trendLabel, ma20: trendRow ? trendRow.ma20 || 0 : 0, ma50: trendRow ? trendRow.ma50 || 0 : 0, trendDate: trendRow ? trendRow.date || "" : "" };
   });
   return {
     cash, principal, totalAssets, totalProfit, totalDividend, totalInterest,
     buyCost, buyQty, buyFees, feeRows, sellProceeds, stockValue,
-    holdings: holdingRows, partners: partnerRows, monitor,
+    holdings: holdingRows, partners: partnerRows, monitor, buyBalance,
     months, monthlyDeposit, startDate, years, totalReturnPct, cagrPct,
     txCount: txs.length,
   };
@@ -220,27 +251,120 @@ function yahooSymbol(code) {
   if (m) return m[1].padStart(4, "0") + ".HK";
   return s;
 }
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 async function fetchQuoteV7(code) {
-  // Yahoo v7：攞 52 週高低同股息（唔攞價，價錢行騰訊），每隻股一日最多攞一次 52 週
-  for (const host of ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]) {
+  // Yahoo v7：攞 52 週高低同股息（唔攞價，價錢行騰訊）。每隻股一日最多成功攞一次 52 週（見 refreshPrices 嘅 week52_date）。
+  // 重試加退避：query1 → 隔 1 秒 → query2 → 隔 2 秒 → query1（最多 3 次）。Yahoo 喺 Railway 共享 IP 成日 429／401，唔重試就好易攞唔到。
+  const hosts = ["query1.finance.yahoo.com", "query2.finance.yahoo.com", "query1.finance.yahoo.com"];
+  const delays = [0, 1000, 2000];
+  for (let i = 0; i < hosts.length; i++) {
+    if (delays[i]) await sleep(delays[i]);
     try {
-      const res = await fetch(`https://${host}/v7/finance/quote?symbols=${encodeURIComponent(yahooSymbol(code))}`, {
+      const res = await fetch(`https://${hosts[i]}/v7/finance/quote?symbols=${encodeURIComponent(yahooSymbol(code))}`, {
         headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(10000),
       });
       if (!res.ok) continue;
       const q = (await res.json())?.quoteResponse?.result?.[0];
       if (!q) continue;
+      const high52 = Number(q.fiftyTwoWeekHigh || 0), low52 = Number(q.fiftyTwoWeekLow || 0);
+      if (!(high52 > low52 && low52 > 0)) continue;
       return {
         price: Number(q.regularMarketPrice || 0),
         prevClose: Number(q.regularMarketPreviousClose || 0),
         changePct: Number(q.regularMarketChangePercent || 0),
-        high52: Number(q.fiftyTwoWeekHigh || 0),
-        low52: Number(q.fiftyTwoWeekLow || 0),
+        high52, low52,
         quoteDps: Number(q.dividendRate || q.trailingAnnualDividendRate || 0),
         quoteYield: Number(q.dividendYield || q.trailingAnnualDividendYield || 0),
+        source: "yahoo-v7",
       };
     } catch (e) { /* 試下一個 */ }
   }
+  return null;
+}
+async function fetchQuoteYahooV8(code) {
+  // Yahoo v8 chart：meta 入面有 fiftyTwoWeekHigh／Low。實測（2026-11-18，呢部機）：
+  // 01579.HK = 17.33／11.90、00003.HK = 7.76／6.4，同已知數完全一致。range=5d 已經夠攞 meta，唔使成年的日線。
+  // 注意：同一部機 v7 嗰陣回 401，但 v8 照通，兩個端點限速情況唔一樣，所以 v8 值得做第二後備。
+  const hosts = ["query1.finance.yahoo.com", "query2.finance.yahoo.com", "query1.finance.yahoo.com"];
+  const delays = [0, 1000, 2000];
+  for (let i = 0; i < hosts.length; i++) {
+    if (delays[i]) await sleep(delays[i]);
+    try {
+      const res = await fetch(`https://${hosts[i]}/v8/finance/chart/${encodeURIComponent(yahooSymbol(code))}?range=5d&interval=1d`, {
+        headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) continue;
+      const result = (await res.json())?.chart?.result?.[0];
+      if (!result || !result.meta) continue;
+      const meta = result.meta;
+      const high52 = Number(meta.fiftyTwoWeekHigh || 0), low52 = Number(meta.fiftyTwoWeekLow || 0);
+      if (!(high52 > low52 && low52 > 0)) continue;
+      // 注意：meta.chartPreviousClose 唔準（實測 06181.HK 回 313.8，實際上一收係 280.00；
+      // 01579.HK 回 16.26，實際係 16.92），所以上一收改用日線收市價陣列計：
+      // 最後一日係今日就用倒數第二日，否則最後一日就係上一收。
+      let prevClose = 0;
+      const closes = result.indicators?.quote?.[0]?.close;
+      const timestamps = result.timestamp;
+      if (Array.isArray(closes)) {
+        const valid = closes.map((c, i) => ({ c: Number(c), t: timestamps ? timestamps[i] : 0 }))
+          .filter((x) => Number.isFinite(x.c) && x.c > 0 && x.t);
+        if (valid.length >= 2) {
+          const lastDate = new Date(valid[valid.length - 1].t * 1000).toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" });
+          const todayHKT = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" });
+          prevClose = valid[lastDate === todayHKT ? valid.length - 2 : valid.length - 1].c;
+        } else if (valid.length === 1) {
+          prevClose = valid[0].c;
+        }
+      }
+      return {
+        price: Number(meta.regularMarketPrice || 0),
+        prevClose,
+        high52, low52, source: "yahoo-v8",
+      };
+    } catch (e) { /* 試下一個 */ }
+  }
+  return null;
+}
+async function fetchQuoteSina(code) {
+  // 新浪 hq.sinajs.cn：港股報價串第 16、17 格就係 52 週高／低（唔使 key）。實測（2026-11-18，呢部機）：
+  // 01579.HK = 17.330／11.094、00003.HK = 7.471／6.296。注意新浪嘅 52 週窗口同 Yahoo 略有唔同，
+  // 數值可以差幾個巴仙，只係 Yahoo 兩個端點都唔通嗰陣嘅最後後備——有數好過無數，位置計出嚟只係近似值。
+  // 回應係 GBK 編碼，中文名會亂碼，但數字同逗號係 ASCII，照 split 就攞到。
+  const digits = String(code || "").toUpperCase().replace(/\.HK$/, "").replace(/^0+/, "").padStart(5, "0");
+  if (!digits || digits === "00000") return null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt) await sleep(1000);
+    try {
+      const res = await fetch(`https://hq.sinajs.cn/list=hk${digits}`, {
+        headers: { "User-Agent": "Mozilla/5.0", Referer: "https://finance.sina.com.cn/" },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) continue;
+      const text = await res.text();
+      const m = text.match(/="([^"]*)"/);
+      if (!m) continue;
+      const p = m[1].split(",");
+      const high52 = parseFloat(p[15]), low52 = parseFloat(p[16]);
+      if (!(high52 > low52 && low52 > 0)) continue;
+      const price = parseFloat(p[6]), prev = parseFloat(p[3]);
+      return {
+        price: Number.isFinite(price) ? price : 0,
+        prevClose: Number.isFinite(prev) ? prev : 0,
+        high52, low52, source: "sina",
+      };
+    } catch (e) { /* 再試一次 */ }
+  }
+  return null;
+}
+async function fetch52Week(code) {
+  // 52 週高低後備鏈：Yahoo v7 → Yahoo v8 chart → 新浪。返 { high52, low52, source, ... } 或 null。
+  // （東方財富 push2 同 Stooq 喺呢部機實測過：前者無回應，後者彈 JS 驗證頁，兩個都用唔到，所以無寫入嚟。）
+  const v7 = await fetchQuoteV7(code);
+  if (v7) return v7;
+  const v8 = await fetchQuoteYahooV8(code);
+  if (v8) return v8;
+  const sina = await fetchQuoteSina(code);
+  if (sina) return sina;
   return null;
 }
 async function fetchQuoteTencent(code) {
@@ -263,36 +387,118 @@ async function fetchQuoteTencent(code) {
     return { price, prevClose: Number.isFinite(prev) ? prev : 0, changePct: prev > 0 ? ((price - prev) / prev) * 100 : 0 };
   } catch (e) { return null; }
 }
-async function fetchQuote(code) {
-  // 價錢：騰訊先，唔得先 Yahoo v7；52 週＋股息：Yahoo v7（失敗就留返舊數，唔會清零）
+async function fetchQuote(code, row) {
+  // 價錢：騰訊先，唔得先 52 週後備鏈入面嘅價；52 週＋股息：Yahoo v7 → v8 → 新浪（失敗就留返舊數，唔會清零）。
+  // 52 週每隻股一日最多成功一次：row.week52_date 係上次成功攞 52 週嘅日期，同一日內有數就唔再試 Yahoo 嗰 part，但價錢照常更新。
+  // 手動設定咗 52 週嘅股（manual52=1）唔會自動更新，免得覆蓋用戶自己填嘅數。
   const upper = code.toUpperCase();
   const t = await fetchQuoteTencent(code);
-  const y = await fetchQuoteV7(code);
-  const price = t?.price || y?.price || 0;
-  if (!price) return { code: upper, ok: false, error: "騰訊同 Yahoo 都攞唔到價" };
-  const prev = t?.prevClose || y?.prevClose || 0;
-  const pct = prev > 0 ? ((price - prev) / prev) * 100 : (y?.changePct || 0);
-  return { code: upper, price, prevClose: prev, changePct: pct, high52: y?.high52 || 0, low52: y?.low52 || 0, quoteDps: y?.quoteDps || 0, quoteYield: y?.quoteYield || 0, currency: "HKD" };
+  const today = new Date().toISOString().slice(0, 10);
+  const has52Today = !!(row && row.week52_date === today && row.high52 > 0 && row.low52 > 0);
+  const manual52 = !!(row && row.manual52);
+  // 價錢後備同 52 週後備要分開：就算今日已經成功攞過 52 週（唔再試 52 週），騰訊攞唔到價嗰陣
+  // 都要行後備鏈攞價，唔可以因為 skip 咗 52 週就連價都攞唔到。
+  let w = null, week52Fresh = false;
+  if (!t || !t.price) {
+    w = await fetch52Week(code);
+    week52Fresh = !!(w && w.high52 > w.low52 && w.low52 > 0) && !has52Today && !manual52;
+  } else if (!has52Today && !manual52) {
+    w = await fetch52Week(code);
+    week52Fresh = !!(w && w.high52 > w.low52 && w.low52 > 0);
+  }
+  const price = t?.price || w?.price || 0;
+  if (!price) return { code: upper, ok: false, error: "騰訊同 Yahoo／新浪都攞唔到價" };
+  const prev = t?.prevClose || w?.prevClose || 0;
+  const pct = prev > 0 ? ((price - prev) / prev) * 100 : 0;
+  return {
+    code: upper, price, prevClose: prev, changePct: pct,
+    high52: week52Fresh ? w.high52 : 0, low52: week52Fresh ? w.low52 : 0,
+    week52Fresh, week52Source: week52Fresh ? w.source : null,
+    quoteDps: w?.quoteDps || 0, quoteYield: w?.quoteYield || 0, currency: "HKD",
+  };
 }
 async function refreshPrices() {
   const rows = db.prepare("SELECT * FROM stocks ORDER BY code").all();
   const results = [];
   const now = new Date().toISOString();
+  const today = now.slice(0, 10);
   for (const s of rows) {
-    const q = await fetchQuote(s.code);
+    const q = await fetchQuote(s.code, s);
     if (q.price) {
-      // 52 週／股息只喺 Yahoo 攞到新數嗰陣先更新，攞唔到就留返舊數
-      const high52 = q.high52 > 0 ? q.high52 : s.high52;
-      const low52 = q.low52 > 0 ? q.low52 : s.low52;
+      // 52 週／股息只喺今次攞到新數嗰陣先更新，攞唔到就留返舊數；手動 52 週唔會畀自動更新覆蓋
+      const high52 = q.week52Fresh ? q.high52 : s.high52;
+      const low52 = q.week52Fresh ? q.low52 : s.low52;
+      const week52Date = q.week52Fresh ? today : (s.week52_date || "");
       const quoteDps = q.quoteDps > 0 ? q.quoteDps : s.quote_dps;
       const quoteYield = q.quoteYield > 0 ? q.quoteYield : s.quote_yield;
-      db.prepare("UPDATE stocks SET price = ?, prev_close = ?, change_pct = ?, updated_at = ?, high52 = ?, low52 = ?, quote_dps = ?, quote_yield = ? WHERE code = ?")
-        .run(q.price, q.prevClose, q.changePct, now, high52, low52, quoteDps, quoteYield, s.code);
-      results.push({ ...q, ok: true, updatedAt: now });
+      db.prepare("UPDATE stocks SET price = ?, prev_close = ?, change_pct = ?, updated_at = ?, high52 = ?, low52 = ?, week52_date = ?, quote_dps = ?, quote_yield = ? WHERE code = ?")
+        .run(q.price, q.prevClose, q.changePct, now, high52, low52, week52Date, quoteDps, quoteYield, s.code);
+      const has52 = high52 > 0 && low52 > 0;
+      results.push({ ...q, ok: true, updatedAt: now, week52: has52 });
     } else {
-      results.push({ ...q, ok: false });
+      results.push({ ...q, ok: false, week52: s.high52 > 0 && s.low52 > 0, week52Fresh: false });
     }
     await new Promise((r) => setTimeout(r, 500)); // 隔開少少，免限速
+  }
+  // 趨勢每日每隻股最多成功計算一次，喺價錢更新之後做；失敗留返上次好值，唔會清零。
+  const trendResults = await refreshTrends();
+  results.trendOk = trendResults.filter((r) => r.ok).length;
+  results.trendTotal = trendResults.length;
+  return results;
+}
+
+async function fetchTrendHistory(code) {
+  // 趨勢：Yahoo v8 chart 半年日線收市價（range=6mo、interval=1d），計 MA20／MA50。
+  // 上升軌：收市價 ＞ MA20 ＞ MA50，且 MA20、MA50 都高過 5 個交易日前；下降軌：收市價 ＜ MA20 ＜ MA50，
+  // 且兩條線都低過 5 日前；其餘 → 橫行／整固。斜率比較對象係 5 個交易日前，唔係昨日。
+  // 少過 55 個收市價（MA50 要 50 個，加 5 日斜率要多 5 個）就無結果。公式入面嘅「價」係 Yahoo 日線
+  // 最後一個收市價，唔係騰訊即時現價——日內升穿／跌穿均線唔會即時改變趨勢。
+  const hosts = ["query1.finance.yahoo.com", "query2.finance.yahoo.com", "query1.finance.yahoo.com"];
+  const delays = [0, 1000, 2000];
+  for (let i = 0; i < hosts.length; i++) {
+    if (delays[i]) await sleep(delays[i]);
+    try {
+      const res = await fetch(`https://${hosts[i]}/v8/finance/chart/${encodeURIComponent(yahooSymbol(code))}?range=6mo&interval=1d`, {
+        headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) continue;
+      const result = (await res.json())?.chart?.result?.[0];
+      const closes = result?.indicators?.quote?.[0]?.close;
+      if (!Array.isArray(closes)) continue;
+      const valid = closes.map(Number).filter((c) => Number.isFinite(c) && c > 0);
+      if (valid.length < 55) continue;
+      const ma = (n, back) => {
+        const end = valid.length - (back || 0);
+        const slice = valid.slice(end - n, end);
+        return slice.reduce((s, c) => s + c, 0) / n;
+      };
+      const price = valid[valid.length - 1];
+      const ma20 = ma(20, 0), ma50 = ma(50, 0), ma20Prev = ma(20, 5), ma50Prev = ma(50, 5);
+      let trend = "sideways";
+      if (price > ma20 && ma20 > ma50 && ma20 > ma20Prev && ma50 > ma50Prev) trend = "up";
+      else if (price < ma20 && ma20 < ma50 && ma20 < ma20Prev && ma50 < ma50Prev) trend = "down";
+      return { price, ma20, ma50, trend, source: "yahoo-v8-6mo" };
+    } catch (e) { /* 試下一個 */ }
+  }
+  return null;
+}
+async function refreshTrends() {
+  // 每日每隻股最多成功計算一次（趨勢表 date 欄記低上次成功日期）。失敗唔寫入，留返上次好值。
+  const rows = db.prepare("SELECT * FROM stocks ORDER BY code").all();
+  const today = new Date().toISOString().slice(0, 10);
+  const results = [];
+  for (const s of rows) {
+    const old = db.prepare("SELECT * FROM trends WHERE code = ?").get(s.code);
+    if (old && old.ok && old.date === today) { results.push({ code: s.code, ok: true, cached: true, trend: old.trend }); continue; }
+    const t = await fetchTrendHistory(s.code);
+    if (t) {
+      db.prepare(`INSERT INTO trends(code, date, ma20, ma50, trend, ok, updated_at) VALUES(?, ?, ?, ?, ?, 1, ?)
+        ON CONFLICT(code) DO UPDATE SET date = excluded.date, ma20 = excluded.ma20, ma50 = excluded.ma50, trend = excluded.trend, ok = 1, updated_at = excluded.updated_at`)
+        .run(s.code, today, t.ma20, t.ma50, t.trend, new Date().toISOString());
+      results.push({ code: s.code, ok: true, cached: false, trend: t.trend });
+    } else {
+      results.push({ code: s.code, ok: !!(old && old.ok), cached: true, trend: old ? old.trend : "" });
+    }
   }
   return results;
 }
@@ -395,7 +601,7 @@ app.get("/api/export/csv", (req, res) => {
   res.send("\uFEFF" + head + "\r\n" + body);
 });
 app.get("/api/backup", (req, res) => {
-  res.json({ version: VERSION, exportedAt: new Date().toISOString(), settings: { monthlyDeposit: getSetting("monthlyDeposit", "500"), startDate: getSetting("startDate", "2018-03-01") }, partners: db.prepare("SELECT * FROM partners ORDER BY sort").all(), stocks: db.prepare("SELECT * FROM stocks").all(), transactions: db.prepare("SELECT * FROM transactions ORDER BY date ASC").all() });
+  res.json({ version: VERSION, exportedAt: new Date().toISOString(), settings: { monthlyDeposit: getSetting("monthlyDeposit", "500"), startDate: getSetting("startDate", "2018-03-01") }, partners: db.prepare("SELECT * FROM partners ORDER BY sort").all(), stocks: db.prepare("SELECT * FROM stocks").all(), trends: db.prepare("SELECT * FROM trends").all(), transactions: db.prepare("SELECT * FROM transactions ORDER BY date ASC").all() });
 });
 app.post("/api/backup/restore", (req, res) => {
   const b = req.body || {};
@@ -409,6 +615,24 @@ app.post("/api/backup/restore", (req, res) => {
     if (insertTx(tx)) { added++; seen.add(txKey(tx)); }
   }
   if (b.settings) { if (b.settings.monthlyDeposit) setSetting("monthlyDeposit", b.settings.monthlyDeposit); if (b.settings.startDate) setSetting("startDate", b.settings.startDate); }
+  // 還原手動設定（股息、52 週、一手股數）同趨勢：只更新已存在嘅股票，唔會無端端加新股
+  if (Array.isArray(b.stocks)) {
+    for (const s of b.stocks) {
+      if (!s.code) continue;
+      const row = db.prepare("SELECT code FROM stocks WHERE code = ?").get(String(s.code).toUpperCase());
+      if (!row) continue;
+      db.prepare("UPDATE stocks SET dps = ?, high52 = ?, low52 = ?, manual52 = ?, lot_size = ?, lot_size_manual = ? WHERE code = ?")
+        .run(s.dps ?? null, s.high52 || 0, s.low52 || 0, s.manual52 ? 1 : 0, s.lot_size || null, s.lot_size_manual ? 1 : 0, String(s.code).toUpperCase());
+    }
+  }
+  if (Array.isArray(b.trends)) {
+    for (const t of b.trends) {
+      if (!t.code) continue;
+      db.prepare(`INSERT INTO trends(code, date, ma20, ma50, trend, ok, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(code) DO UPDATE SET date = excluded.date, ma20 = excluded.ma20, ma50 = excluded.ma50, trend = excluded.trend, ok = excluded.ok, updated_at = excluded.updated_at`)
+        .run(String(t.code).toUpperCase(), t.date || "", t.ma20 || 0, t.ma50 || 0, t.trend || "", t.ok ? 1 : 0, t.updated_at || "");
+    }
+  }
   res.json({ ok: true, imported: added, duplicates });
 });
 app.post("/api/prices", (req, res) => {
@@ -422,11 +646,14 @@ app.post("/api/prices", (req, res) => {
   }
   res.json({ ok: true, updated });
 });
-// 自動更新全部股票股價（Yahoo），監察股票同持股一齊更新
+// 自動更新全部股票股價，監察股票同持股一齊更新
 app.post("/api/prices/refresh", async (req, res) => {
   const results = await refreshPrices();
   const ok = results.filter((r) => r.ok).length;
-  res.json({ ok: ok > 0, updated: ok, total: results.length, results });
+  const week52Ok = results.filter((r) => r.week52).length;
+  const week52Fresh = results.filter((r) => r.week52Fresh).length;
+  const week52Missing = results.filter((r) => !r.week52).map((r) => r.code);
+  res.json({ ok: ok > 0, updated: ok, total: results.length, week52Ok, week52Fresh, week52Missing, trendOk: results.trendOk || 0, trendTotal: results.trendTotal || 0, results });
 });
 app.get("/api/partners", (req, res) => res.json(db.prepare("SELECT * FROM partners ORDER BY sort").all()));
 app.post("/api/partners", (req, res) => {
@@ -452,16 +679,43 @@ app.delete("/api/partners/:key", (req, res) => {
 app.post("/api/stocks", (req, res) => {
   const code = (req.body.code || "").trim().toUpperCase();
   if (!code) return res.status(400).json({ error: "請輸入股票代號" });
-  db.prepare("INSERT OR IGNORE INTO stocks(code, price) VALUES(?, 0)").run(code);
+  // 歸一化之後重複（例如 00003.HK 同 003.HK 係同一隻）就提示，唔刪任何現有數據
+  const canon = canonicalCode(code);
+  const dup = db.prepare("SELECT code FROM stocks").all().find((s) => canonicalCode(s.code) === canon);
+  if (dup) return res.status(400).json({ error: `已經有呢隻股票（${dup.code}），${code} 同佢係同一隻，唔使再加` });
+  db.prepare("INSERT OR IGNORE INTO stocks(code, price, lot_size) VALUES(?, 0, ?)").run(code, defaultLotSize(code));
   res.json({ ok: true });
 });
+// 股票代號歸一化：去前導零（00003.HK、003.HK、3.HK 都係同一隻 3.HK），用嚟判斷重複
+function canonicalCode(code) {
+  const s = String(code || "").trim().toUpperCase();
+  const m = s.match(/^0*(\d+)\.HK$/);
+  return m ? m[1] + ".HK" : s;
+}
 app.put("/api/stocks/:code", (req, res) => {
-  // 手動設定每股股息（dps，傳 null 清除）同 52 週高低
+  // 手動設定每股股息（dps，傳 null 清除）、52 週高低同每手股數（lotSize，傳 null 或 0 回復預設）
   const code = req.params.code.toUpperCase();
   const b = req.body || {};
   if (b.dps !== undefined) db.prepare("UPDATE stocks SET dps = ? WHERE code = ?").run(b.dps === null ? null : parseFloat(b.dps) || 0, code);
+  if (b.lotSize !== undefined) {
+    if (b.lotSize === null || Number(b.lotSize) === 0) {
+      db.prepare("UPDATE stocks SET lot_size = ?, lot_size_manual = 0 WHERE code = ?").run(defaultLotSize(code), code);
+    } else {
+      const v = Math.round(parseFloat(b.lotSize));
+      if (Number.isFinite(v) && v > 0) db.prepare("UPDATE stocks SET lot_size = ?, lot_size_manual = 1 WHERE code = ?").run(v, code);
+    }
+  }
   if (b.high52 !== undefined) db.prepare("UPDATE stocks SET high52 = ? WHERE code = ?").run(parseFloat(b.high52) || 0, code);
   if (b.low52 !== undefined) db.prepare("UPDATE stocks SET low52 = ? WHERE code = ?").run(parseFloat(b.low52) || 0, code);
+  // 手動設定 52 週高低嗰陣記低，自動更新唔會覆蓋；兩個一齊清走（0）就恢復自動更新
+  if (b.high52 !== undefined || b.low52 !== undefined) {
+    const h = b.high52 !== undefined ? parseFloat(b.high52) || 0 : null;
+    const l = b.low52 !== undefined ? parseFloat(b.low52) || 0 : null;
+    let manual = null;
+    if (h === 0 && l === 0) manual = 0;
+    else if ((h !== null && h > 0) || (l !== null && l > 0)) manual = 1;
+    if (manual !== null) db.prepare("UPDATE stocks SET manual52 = ? WHERE code = ?").run(manual, code);
+  }
   res.json({ ok: true });
 });
 app.delete("/api/stocks/:code", (req, res) => {
