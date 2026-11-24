@@ -1,1 +1,29 @@
-{"dependencies":{"express":"^4.21.2","iconv-lite":"^0.6.3","multer":"^2.0.1"},"description":"投資合伙戶口管理系統 — 獨立站（Node.js + Express + SQLite，高息定投合夥戶口用）","engines":{"node":">=22"},"license":"MIT","main":"server.js","name":"partnership-account-standalone","scripts":{"seed":"node scripts/seed.js","start":"node server.js"},"version":"3.2.4"}
+{
+  "name": "hatch-ts-space-tou-zi-he-huo-hu-kou-guan-li-xi-tong",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.10",
+  "scripts": {
+    "typecheck": "bun x tsc --noEmit -p client/tsconfig.json && bun x tsc --noEmit -p server/tsconfig.json",
+    "build": "bun run build:server && bun run build:client",
+    "build:server": "cd server && bun build ./src/actions.ts --target=bun --outfile=./dist/actions.js",
+    "build:client": "bun ./client/build.mjs"
+  },
+  "dependencies": {
+    "@hatch/space-sdk": "file:/opt/hatch/skills/spaces/ts-runtime/dist/space-sdk.tgz",
+    "@tanstack/react-query": "5.100.10",
+    "drizzle-orm": "0.45.2",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "recharts": "2.15.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.2",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "tailwindcss": "4.1.13",
+    "tailwindcss-safe-area": "1.3.0",
+    "typescript": "5.6.3"
+  }
+}

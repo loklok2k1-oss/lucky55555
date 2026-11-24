@@ -1,0 +1,21 @@
+{
+  "entry": "client/dist/index.html",
+  "managedCronJobs": [
+    {
+      "action": "refreshPrices",
+      "args": {},
+      "cron_id": "partnership-price-refresh",
+      "id": "partnership-price-refresh",
+      "kind": "space_action",
+      "schedule": {
+        "every": "30m",
+        "kind": "interval"
+      },
+      "slug": "tou-zi-he-huo-hu-kou-guan-li-xi-tong"
+    }
+  ],
+  "name": "投資合伙戶口管理系統",
+  "platformVersion": 29,
+  "runtime": "typescript",
+  "slug": "tou-zi-he-huo-hu-kou-guan-li-xi-tong"
+}
